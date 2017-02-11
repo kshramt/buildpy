@@ -31,9 +31,6 @@ import subprocess
 import sys
 
 import pake
-# import scipy as sp
-# import matplotlib.pyplot as plt
-# import pandas as pd
 
 
 os.environ["SHELL"] = "/bin/bash"
