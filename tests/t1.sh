@@ -44,19 +44,8 @@ os.environ["PYTHON"] = sys.executable
 __dsl = pake.DSL()
 task = __dsl.task
 phony = __dsl.phony
-
-
-def sh(s, stdout=None):
-    print(s, file=sys.stderr)
-    return subprocess.run(
-        s,
-        shell=True,
-        check=True,
-        env=os.environ,
-        executable="/bin/bash",
-        stdout=stdout,
-        universal_newlines=True,
-    )
+sh = pake.sh
+rm = pake.rm
 
 
 def let():

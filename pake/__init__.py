@@ -1,5 +1,7 @@
 import argparse
 import os
+import subprocess
+import sys
 import warnings
 from typing import (
     Any,
@@ -68,10 +70,7 @@ class _FileJob(_Job):
 
     def rm_targets(self):
         for t in self.ts:
-            try:
-                os.remove(t)
-            except:
-                pass
+            rm(t)
 
     def need_update(self):
         stat_ds = [os.stat(d) for d in self.unique_ds]
@@ -182,6 +181,27 @@ class _TaskPool:
                         dj.n_rest -= 1
                         if dj.n_rest == 0:
                             self.push_job(dj)
+
+
+def sh(s, stdout=None):
+    print(s, file=sys.stderr)
+    return subprocess.run(
+        s,
+        shell=True,
+        check=True,
+        env=os.environ,
+        executable="/bin/bash",
+        stdout=stdout,
+        universal_newlines=True,
+    )
+
+
+def rm(path):
+    print(f"os.remove({repr(path)})", file=sys.stderr)
+    try:
+        os.remove(path)
+    except:
+        pass
 
 
 def _collect_phonies(job_of_target, deps_of_phony, f_of_phony):
