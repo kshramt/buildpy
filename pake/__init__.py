@@ -163,10 +163,7 @@ class _ThreadPool:
         self._queue.put(j)
         with self._threads_loc:
             if len(self._threads) < self._n_max:
-                t = threading.Thread(
-                    target=self._worker,
-                    daemon=True,
-                )
+                t = threading.Thread(target=self._worker, daemon=True)
                 self._threads.add(t)
                 t.start()
 
