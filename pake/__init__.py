@@ -6,16 +6,62 @@ import subprocess
 import sys
 import threading
 import warnings
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    List,
-    Set,
-)
 
 
 __version__ = "0.1.0"
+
+
+class DSL:
+    def __init__(self):
+        self._job_of_target = dict()
+        self._f_of_phony = dict()
+        self._deps_of_phony = dict()
+
+    def task(self, targets, deps):
+        def _(f):
+            j = _FileJob(f, targets, deps)
+            for t in targets:
+                _set_unique(self._job_of_target, t, j)
+            return _do_nothing
+        return _
+
+    def phony(self, target, deps):
+        self._deps_of_phony.setdefault(target, []).extend(deps)
+
+        def _(f):
+            _set_unique(self._f_of_phony, target, f)
+            return _do_nothing
+        return _
+
+    def finish(
+            self,
+            targets,
+            keep_going,
+            n_jobs,
+    ):
+        assert n_jobs > 0
+        _collect_phonies(self._job_of_target, self._deps_of_phony, self._f_of_phony)
+        dependent_jobs = dict()
+        leaf_jobs = []
+        for target in targets:
+            _make_graph(
+                dependent_jobs,
+                leaf_jobs,
+                target,
+                self._job_of_target,
+                self.task,
+                self._deps_of_phony,
+                _nil,
+            )
+        _process_jobs(leaf_jobs, dependent_jobs, keep_going, n_jobs)
+
+    def main(self, argv):
+        args = _parse_argv(argv[1:])
+        self.finish(
+            args.targets,
+            args.keep_going,
+            args.jobs,
+        )
 
 
 class Err(Exception):
@@ -23,25 +69,28 @@ class Err(Exception):
         self.msg=msg
 
 
-class _Nil:
-    __slots__ = ()
+def sh(s, stdout=None):
+    print(s, file=sys.stderr)
+    return subprocess.run(
+        s,
+        shell=True,
+        check=True,
+        env=os.environ,
+        executable="/bin/bash",
+        stdout=stdout,
+        universal_newlines=True,
+    )
 
-    def __contains__(self, x):
-        return False
+
+def rm(path):
+    print(f"os.remove({repr(path)})", file=sys.stderr)
+    try:
+        os.remove(path)
+    except:
+        pass
 
 
-_nil = _Nil()
-
-
-class _Cons:
-    __slots__ = ("h", "t")
-
-    def __init__(self, h, t):
-        self.h = h
-        self.t = t
-
-    def __contains__(self, x):
-        return (self.h == x) or (x in self.t)
+# Internal use only.
 
 
 class _Job:
@@ -98,172 +147,6 @@ class _FileJob(_Job):
         if not stat_ds:
             return False
         return max(d.st_mtime for d in stat_ds) > max(os.path.getmtime(t) for t in self.ts)
-
-
-class DSL:
-    def __init__(self) -> Any:
-        self._job_of_target: Dict[str, _Job] = dict()
-        self._f_of_phony: Dict[str, Callable[[_Job], Any]] = dict()
-        self._deps_of_phony: Dict[str, List[str]] = dict()
-
-    def task(self, targets: List[str], deps: List[str]) -> Callable[[_Job], Any]:
-        def _(f: Callable[[_Job], Any]) -> Callable[[_Job], Any]:
-            j = _FileJob(f, targets, deps)
-            for t in targets:
-                _set_unique(self._job_of_target, t, j)
-            return _do_nothing
-        return _
-
-    def phony(self, target: str, deps: List[str]) -> Callable[[Callable[[_Job], Any]], Callable[[_Job], Any]]:
-        self._deps_of_phony.setdefault(target, []).extend(deps)
-
-        def _(f: Callable[[_Job], Any]) -> Callable[[_Job], Any]:
-            _set_unique(self._f_of_phony, target, f)
-            return _do_nothing
-        return _
-
-    def finish(
-            self,
-            targets,
-            keep_going,
-            n_jobs,
-    ):
-        assert n_jobs > 0
-        _collect_phonies(self._job_of_target, self._deps_of_phony, self._f_of_phony)
-        dependent_jobs = dict()
-        leaf_jobs = []
-        for target in targets:
-            _make_graph(
-                dependent_jobs,
-                leaf_jobs,
-                target,
-                self._job_of_target,
-                self.task,
-                self._deps_of_phony,
-                _nil,
-            )
-        _process_jobs(leaf_jobs, dependent_jobs, keep_going, n_jobs)
-
-    def main(self, argv):
-        args = _parse_argv(argv[1:])
-        self.finish(
-            args.targets,
-            args.keep_going,
-            args.jobs,
-        )
-
-
-def sh(s: str, stdout=None):
-    print(s, file=sys.stderr)
-    return subprocess.run(
-        s,
-        shell=True,
-        check=True,
-        env=os.environ,
-        executable="/bin/bash",
-        stdout=stdout,
-        universal_newlines=True,
-    )
-
-
-def rm(path: str) -> Any:
-    print(f"os.remove({repr(path)})", file=sys.stderr)
-    try:
-        os.remove(path)
-    except:
-        pass
-
-
-def _collect_phonies(
-        job_of_target: Dict[str, _Job],
-        deps_of_phony: Dict[str, List[str]],
-        f_of_phony: Dict[str, Callable[[_Job], Any]],
-) -> Any:
-    for target, deps in deps_of_phony.items():
-        _set_unique(
-            job_of_target,
-            target,
-            _PhonyJob(
-                f_of_phony.get(target, _do_nothing),
-                [target],
-                deps,
-            ),
-        )
-
-
-def _make_graph(
-        dependent_jobs: Dict[str, List[_Job]],
-        leaf_jobs: List[_Job],
-        target: str,
-        job_of_target: Dict[str, _Job],
-        task,
-        phonies,
-        call_chain,
-):
-    if target in call_chain:
-        raise Err(f"A circular dependency detected: {repr(target)} for {repr(call_chain)}")
-    if target not in job_of_target:
-        assert target not in phonies
-        if os.path.lexists(target):
-            @task([target], [])
-            def _(j):
-                raise Err(f"Must not happen: job for leaf node {repr(target)} called")
-        else:
-            raise Err(f"No rule to make {repr(target)}")
-    j = job_of_target[target]
-    if j.visited:
-        return
-    j.visited = True
-    current_call_chain = _Cons(target, call_chain)
-    for dep in j.unique_ds:
-        dependent_jobs.setdefault(dep, []).append(j)
-        _make_graph(
-            dependent_jobs,
-            leaf_jobs,
-            dep,
-            job_of_target,
-            task,
-            phonies,
-            current_call_chain,
-        )
-    j.unique_ds or leaf_jobs.append(j)
-
-
-def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs):
-    tp = _ThreadPool(dependent_jobs, keep_going, n_jobs)
-    defered_errors = queue.Queue()
-    for j in jobs:
-        tp.push_job(j)
-    tp.wait()
-    if defered_errors.qsize() > 0:
-        warnings.warn("Following errors have thrown during the execution")
-        for _ in range(defered_errors.qsize()):
-            j, e = defered_errors.get()
-            warnings.warn(repr(e))
-            warnings.warn(j)
-        raise Err("Execution failed.")
-
-
-class _TSet:
-    def __init__(self):
-        self._lock = threading.Lock()
-        self._set = set()
-
-    def __len__(self):
-        with self._lock:
-            return len(self._set)
-
-    def add(self, x):
-        with self._lock:
-            self._set.add(x)
-
-    def remove(self, x):
-        with self._lock:
-            self._set.remove(x)
-
-    def pop(self):
-        with self._lock:
-            return self._set.pop()
 
 
 class _ThreadPool:
@@ -334,6 +217,110 @@ class _ThreadPool:
             return self._queue.get(block=True, timeout=0.02)
         except queue.Empty:
             return False
+
+
+class _TSet:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._set = set()
+
+    def __len__(self):
+        with self._lock:
+            return len(self._set)
+
+    def add(self, x):
+        with self._lock:
+            self._set.add(x)
+
+    def remove(self, x):
+        with self._lock:
+            self._set.remove(x)
+
+    def pop(self):
+        with self._lock:
+            return self._set.pop()
+
+
+class _Nil:
+    __slots__ = ()
+
+    def __contains__(self, x):
+        return False
+
+
+_nil = _Nil()
+
+
+class _Cons:
+    __slots__ = ("h", "t")
+
+    def __init__(self, h, t):
+        self.h = h
+        self.t = t
+
+    def __contains__(self, x):
+        return (self.h == x) or (x in self.t)
+
+
+def _collect_phonies(job_of_target, deps_of_phony, f_of_phony):
+    for target, deps in deps_of_phony.items():
+        _set_unique(
+            job_of_target, target,
+            _PhonyJob(f_of_phony.get(target, _do_nothing), [target], deps),
+        )
+
+
+def _make_graph(
+        dependent_jobs,
+        leaf_jobs,
+        target,
+        job_of_target,
+        task,
+        phonies,
+        call_chain,
+):
+    if target in call_chain:
+        raise Err(f"A circular dependency detected: {repr(target)} for {repr(call_chain)}")
+    if target not in job_of_target:
+        assert target not in phonies
+        if os.path.lexists(target):
+            @task([target], [])
+            def _(j):
+                raise Err(f"Must not happen: job for leaf node {repr(target)} called")
+        else:
+            raise Err(f"No rule to make {repr(target)}")
+    j = job_of_target[target]
+    if j.visited:
+        return
+    j.visited = True
+    current_call_chain = _Cons(target, call_chain)
+    for dep in j.unique_ds:
+        dependent_jobs.setdefault(dep, []).append(j)
+        _make_graph(
+            dependent_jobs,
+            leaf_jobs,
+            dep,
+            job_of_target,
+            task,
+            phonies,
+            current_call_chain,
+        )
+    j.unique_ds or leaf_jobs.append(j)
+
+
+def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs):
+    tp = _ThreadPool(dependent_jobs, keep_going, n_jobs)
+    defered_errors = queue.Queue()
+    for j in jobs:
+        tp.push_job(j)
+    tp.wait()
+    if defered_errors.qsize() > 0:
+        warnings.warn("Following errors have thrown during the execution")
+        for _ in range(defered_errors.qsize()):
+            j, e = defered_errors.get()
+            warnings.warn(repr(e))
+            warnings.warn(j)
+        raise Err("Execution failed.")
 
 
 def _parse_argv(argv):
