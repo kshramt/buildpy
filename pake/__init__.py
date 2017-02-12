@@ -1,5 +1,4 @@
 import argparse
-import concurrent.futures
 import os
 import queue
 import subprocess
@@ -150,9 +149,10 @@ class _FileJob(_Job):
 
 
 class _ThreadPool:
-    def __init__(self, dependent_jobs, keep_going, n_max):
+    def __init__(self, dependent_jobs, defered_errors, keep_going, n_max):
         assert n_max > 0
         self._dependent_jobs = dependent_jobs
+        self._defered_errors = defered_errors
         self._keep_going = keep_going
         self._n_max = n_max
         self._threads = _TSet()
@@ -194,7 +194,7 @@ class _ThreadPool:
                         warnings.warn(f"{repr(e)}\t{j}")
                         j.rm_targets()
                         if self._keep_going:
-                            defered_errors.put((j, e))
+                            self._defered_errors.put((j, e))
                         else:
                             raise e
                     j.set_n_rest(-1)
@@ -309,8 +309,8 @@ def _make_graph(
 
 
 def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs):
-    tp = _ThreadPool(dependent_jobs, keep_going, n_jobs)
     defered_errors = queue.Queue()
+    tp = _ThreadPool(dependent_jobs, defered_errors, keep_going, n_jobs)
     for j in jobs:
         tp.push_job(j)
     tp.wait()
