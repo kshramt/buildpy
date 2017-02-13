@@ -1,3 +1,4 @@
+import _thread
 import argparse
 import os
 import queue
@@ -102,7 +103,7 @@ class _Job:
         self.visited = False
         self._lock = threading.Lock()
 
-    def __str__(self):
+    def __repr__(self):
         return f"{type(self).__name__}({self.ts}, {self.ds})"
 
     def rm_targets(self):
@@ -121,7 +122,7 @@ class _Job:
 
     def set_n_rest(self, x):
         with self._lock:
-            self.n_rest = x
+            self._n_rest = x
 
 
 class _PhonyJob(_Job):
@@ -159,6 +160,13 @@ class _ThreadPool:
         self._threads_loc = threading.Lock()
         self._queue = queue.Queue()
 
+    def push_jobs(self, jobs):
+        # pre-load `jobs` to avoid a situation where no active thread exist while a job is enqueued
+        for i in range(len(jobs) - self._n_max):
+            self._queue.put(jobs[-(i + 1)])
+        for j in jobs[:self._n_max]:
+            self.push_job(j)
+
     def push_job(self, j):
         self._queue.put(j)
         with self._threads_loc:
@@ -188,12 +196,13 @@ class _ThreadPool:
                         j.f(j)
                     except Exception as e:
                         got_error = True
-                        warnings.warn(f"{repr(e)}\t{j}")
+                        warnings.warn(repr(j))
+                        warnings.warn(repr(e))
                         j.rm_targets()
                         if self._keep_going:
                             self._defered_errors.put((j, e))
                         else:
-                            raise e
+                            self._die(e)
                     j.set_n_rest(-1)
                 if not got_error:
                     for t in j.ts:
@@ -202,6 +211,10 @@ class _ThreadPool:
                             dj.dec_n_rest()
                             if dj.n_rest() == 0:
                                 self.push_job(dj)
+        except Exception as e:
+            warnings.warn(repr(e))
+            if not self._keep_going:
+                self._die(e)
         finally:
             with self._threads_loc:
                 try:
@@ -214,6 +227,10 @@ class _ThreadPool:
             return self._queue.get(block=True, timeout=0.02)
         except queue.Empty:
             return False
+
+    def _die(self, e):
+        _thread.interrupt_main()
+        sys.exit(e)
 
 
 class _TSet:
@@ -308,8 +325,7 @@ def _make_graph(
 def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs):
     defered_errors = queue.Queue()
     tp = _ThreadPool(dependent_jobs, defered_errors, keep_going, n_jobs)
-    for j in jobs:
-        tp.push_job(j)
+    tp.push_jobs(jobs)
     tp.wait()
     if defered_errors.qsize() > 0:
         warnings.warn("Following errors have thrown during the execution")
