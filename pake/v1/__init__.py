@@ -1,10 +1,12 @@
 import _thread
 import argparse
+import math
 import os
 import queue
 import subprocess
 import sys
 import threading
+import time
 import warnings
 
 version = "0.1.0"
@@ -20,6 +22,7 @@ class DSL:
     def file(self, targets, deps, desc=None):
         targets = _listize(targets)
         deps = _listize(deps)
+
         def _(f):
             j = _FileJob(f, targets, deps, [desc])
             for t in targets:
@@ -41,6 +44,7 @@ class DSL:
             targets,
             keep_going,
             n_jobs,
+            load_average,
             descriptions,
             dependencies,
     ):
@@ -63,7 +67,7 @@ class DSL:
                     self._deps_of_phony,
                     _nil,
                 )
-            _process_jobs(leaf_jobs, dependent_jobs, keep_going, n_jobs)
+            _process_jobs(leaf_jobs, dependent_jobs, keep_going, n_jobs, load_average)
 
     def main(self, argv):
         args = _parse_argv(argv[1:])
@@ -71,6 +75,7 @@ class DSL:
             args.targets,
             args.keep_going,
             args.jobs,
+            args.load_average,
             args.descriptions,
             args.dependencies,
         )
@@ -84,7 +89,7 @@ class Err(Exception):
 def sh(s, stdout=None):
     print(s, file=sys.stderr)
     return subprocess.run(
-        s,
+        "export ff=1\n" + s,
         shell=True,
         check=True,
         env=os.environ,
@@ -163,15 +168,18 @@ class _FileJob(_Job):
 
 
 class _ThreadPool:
-    def __init__(self, dependent_jobs, defered_errors, keep_going, n_max):
+    def __init__(self, dependent_jobs, defered_errors, keep_going, n_max, load_average):
         assert n_max > 0
         self._dependent_jobs = dependent_jobs
         self._defered_errors = defered_errors
         self._keep_going = keep_going
         self._n_max = n_max
+        self._load_average = load_average
         self._threads = _TSet()
+        self._unwaited_threads = _TSet()
         self._threads_loc = threading.Lock()
         self._queue = queue.Queue()
+        self._n_running = _TInt(0)
 
     def push_jobs(self, jobs):
         # pre-load `jobs` to avoid a situation where no active thread exist while a job is enqueued
@@ -183,15 +191,21 @@ class _ThreadPool:
     def push_job(self, j):
         self._queue.put(j)
         with self._threads_loc:
-            if len(self._threads) < self._n_max:
+            if (
+                    len(self._threads) < 1 or (
+                        len(self._threads) < self._n_max and
+                        os.getloadavg()[0] <= self._load_average
+                    )
+            ):
                 t = threading.Thread(target=self._worker, daemon=True)
                 self._threads.add(t)
+                self._unwaited_threads.add(t)
                 t.start()
 
     def wait(self):
         while True:
             try:
-                t = self._threads.pop()
+                t = self._unwaited_threads.pop()
             except KeyError as e:
                 break
             t.join()
@@ -205,6 +219,14 @@ class _ThreadPool:
                 assert j.n_rest() == 0
                 got_error = False
                 if j.need_update():
+                    assert self._n_running.val() >= 0
+                    if math.isfinite(self._load_average):
+                        while (
+                                self._n_running.val() > 0 and
+                                os.getloadavg()[0] > self._load_average
+                        ):
+                            time.sleep(1)
+                    self._n_running.inc()
                     try:
                         j.f(j)
                     except Exception as e:
@@ -216,7 +238,8 @@ class _ThreadPool:
                             self._defered_errors.put((j, e))
                         else:
                             self._die(e)
-                    j.set_n_rest(-1)
+                    self._n_running.dec()
+                j.set_n_rest(-1)
                 if not got_error:
                     for t in j.ts:
                         # top targets does not have dependent jobs
@@ -232,6 +255,7 @@ class _ThreadPool:
             with self._threads_loc:
                 try:
                     self._threads.remove(threading.current_thread())
+                    self._unwaited_threads.remove(threading.current_thread())
                 except:
                     pass
 
@@ -266,6 +290,24 @@ class _TSet:
     def pop(self):
         with self._lock:
             return self._set.pop()
+
+
+class _TInt:
+    def __init__(self, x):
+        self._x = x
+        self._lock = threading.Lock()
+
+    def val(self):
+        with self._lock:
+            return self._x
+
+    def inc(self):
+        with self._lock:
+            self._x += 1
+
+    def dec(self):
+        with self._lock:
+            self._x -= 1
 
 
 class _Nil:
@@ -307,6 +349,12 @@ def _parse_argv(argv):
         help="Number of parallel external jobs.",
     )
     parser.add_argument(
+        "-l", "--load-average",
+        type=float,
+        default=float("inf"),
+        help="No new job is started if there are other running jobs and the load average is higher than the specified value.",
+    )
+    parser.add_argument(
         "-k", "--keep-going",
         action="store_true",
         default=False,
@@ -326,6 +374,7 @@ def _parse_argv(argv):
     )
     args = parser.parse_args(argv)
     assert args.jobs > 0
+    assert args.load_average > 0
     if not args.targets:
         args.targets.append("all")
     return args
@@ -348,9 +397,9 @@ def _print_dependencies(job_of_target):
         print()
 
 
-def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs):
+def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, load_average):
     defered_errors = queue.Queue()
-    tp = _ThreadPool(dependent_jobs, defered_errors, keep_going, n_jobs)
+    tp = _ThreadPool(dependent_jobs, defered_errors, keep_going, n_jobs, load_average)
     tp.push_jobs(jobs)
     tp.wait()
     if defered_errors.qsize() > 0:
