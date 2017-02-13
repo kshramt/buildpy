@@ -1,4 +1,5 @@
 #!/bin/bash
+# @(#) smoke test
 
 # set -xv
 set -o nounset

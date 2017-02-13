@@ -1,4 +1,5 @@
 #!/bin/bash
+# @(#) -j
 
 # set -xv
 set -o nounset
