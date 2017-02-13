@@ -30,7 +30,8 @@ pake_py_files = list(py_files.intersection(pake_files) - test_files)
 
 
 def let():
-    phony("all", ["check"])
+    phony("all", ["check"], "The default target")
+    phony("check", [], desc="Run tests")
 
     for v in vs:
         v_files = [path for path in all_files if path.startswith(os.path.join("pake", v))]
@@ -40,7 +41,7 @@ def let():
                 test_sh_done = test_sh + ".done"
                 phony("check", [test_sh_done])
 
-                @file([test_sh_done], [test_sh] + pake_py_files)
+                @file([test_sh_done], [test_sh] + pake_py_files, desc=f"Test {test_sh}")
                 def _(j):
                     sh(f"""
                     {j.ds[0]}
@@ -53,7 +54,7 @@ def let():
                 test_py_done = test_py + ".done"
                 phony("check", [test_py_done])
 
-                @file([test_py_done], [test_py] + pake_py_files)
+                @file([test_py_done], [test_py] + pake_py_files, desc=f"Test {test_py}")
                 def _(j):
                     sh(f"""
                     {os.environ["PYTHON"]} {j.ds[0]}

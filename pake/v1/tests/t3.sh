@@ -45,9 +45,10 @@ sh = pakevx.sh
 rm = pakevx.rm
 
 
-def let():
-    phony("all", [], desc="Default target")
-let()
+phony("all", ["check"], desc="Default target")
+phony("check", ["t1", "t2"], desc="Run tests")
+phony("t2", [], desc="Test 2")
+phony("t1", [], desc="Test 1")
 
 
 if __name__ == '__main__':
@@ -56,8 +57,16 @@ EOF
 
 
 cat <<EOF > expect
+all
+	Default target
+check
+	Run tests
+t1
+	Test 1
+t2
+	Test 2
 EOF
 
-"$PYTHON" pakefile.py > actual
+"$PYTHON" pakefile.py -D > actual
 
 colordiff expect actual

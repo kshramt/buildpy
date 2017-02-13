@@ -15,43 +15,59 @@ class DSL:
         self._job_of_target = dict()
         self._f_of_phony = dict()
         self._deps_of_phony = dict()
+        self._descs_of_phony = dict()
 
-    def file(self, targets, deps):
+    def file(self, targets, deps, desc=None):
         def _(f):
-            j = _FileJob(f, targets, deps)
+            j = _FileJob(f, targets, deps, [desc])
             for t in targets:
                 _set_unique(self._job_of_target, t, j)
             return _do_nothing
         return _
 
-    def phony(self, target, deps):
+    def phony(self, target, deps, desc=None):
         self._deps_of_phony.setdefault(target, []).extend(deps)
+        self._descs_of_phony.setdefault(target, []).append(desc)
 
         def _(f):
             _set_unique(self._f_of_phony, target, f)
             return _do_nothing
         return _
 
-    def finish(self, targets, keep_going, n_jobs):
+    def finish(
+            self,
+            targets,
+            keep_going,
+            n_jobs,
+            descriptions,
+    ):
         assert n_jobs > 0
-        _collect_phonies(self._job_of_target, self._deps_of_phony, self._f_of_phony)
-        dependent_jobs = dict()
-        leaf_jobs = []
-        for target in targets:
-            _make_graph(
-                dependent_jobs,
-                leaf_jobs,
-                target,
-                self._job_of_target,
-                self.file,
-                self._deps_of_phony,
-                _nil,
-            )
-        _process_jobs(leaf_jobs, dependent_jobs, keep_going, n_jobs)
+        _collect_phonies(self._job_of_target, self._deps_of_phony, self._f_of_phony, self._descs_of_phony)
+        if descriptions:
+            _print_descriptions(self._job_of_target)
+        else:
+            dependent_jobs = dict()
+            leaf_jobs = []
+            for target in targets:
+                _make_graph(
+                    dependent_jobs,
+                    leaf_jobs,
+                    target,
+                    self._job_of_target,
+                    self.file,
+                    self._deps_of_phony,
+                    _nil,
+                )
+            _process_jobs(leaf_jobs, dependent_jobs, keep_going, n_jobs)
 
     def main(self, argv):
         args = _parse_argv(argv[1:])
-        self.finish(args.targets, args.keep_going, args.jobs)
+        self.finish(
+            args.targets,
+            args.keep_going,
+            args.jobs,
+            args.descriptions,
+        )
 
 
 class Err(Exception):
@@ -84,10 +100,11 @@ def rm(path):
 
 
 class _Job:
-    def __init__(self, f, ts, ds):
+    def __init__(self, f, ts, ds, descs):
         self.f = f
         self.ts = ts
         self.ds = ds
+        self.descs = [desc for desc in descs if desc is not None]
         self.unique_ds = _unique(ds)
         self._n_rest = len(self.unique_ds)
         self.visited = False
@@ -116,15 +133,15 @@ class _Job:
 
 
 class _PhonyJob(_Job):
-    def __init__(self, f, ts, ds):
+    def __init__(self, f, ts, ds, descs):
         if len(ts) != 1:
             raise Err(f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}")
-        super().__init__(f, ts, ds)
+        super().__init__(f, ts, ds, descs)
 
 
 class _FileJob(_Job):
-    def __init__(self, f, ts, ds):
-        super().__init__(f, ts, ds)
+    def __init__(self, f, ts, ds, descs):
+        super().__init__(f, ts, ds, descs)
 
     def rm_targets(self):
         for t in self.ts:
@@ -266,11 +283,69 @@ class _Cons:
         return (self.h == x) or (x in self.t)
 
 
-def _collect_phonies(job_of_target, deps_of_phony, f_of_phony):
+def _parse_argv(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "targets",
+        nargs="*",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {version}",
+    )
+    parser.add_argument(
+        "-j", "--jobs",
+        type=int,
+        default=1,
+        help="Number of parallel external jobs.",
+    )
+    parser.add_argument(
+        "-k", "--keep-going",
+        action="store_true",
+        default=False,
+        help="Keep going unrelated jobs even if some jobs fail.",
+    )
+    parser.add_argument(
+        "-D", "--descriptions",
+        action="store_true",
+        default=False,
+        help="Print descriptions, then exit.",
+    )
+    args = parser.parse_args(argv)
+    assert args.jobs > 0
+    if not args.targets:
+        args.targets.append("all")
+    return args
+
+
+def _print_descriptions(job_of_target):
+    for target in sorted(job_of_target.keys()):
+        print(target)
+        for desc in job_of_target[target].descs:
+            for l in desc.split("\t"):
+                print("\t" + l)
+
+
+def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs):
+    defered_errors = queue.Queue()
+    tp = _ThreadPool(dependent_jobs, defered_errors, keep_going, n_jobs)
+    tp.push_jobs(jobs)
+    tp.wait()
+    if defered_errors.qsize() > 0:
+        warnings.warn("Following errors have thrown during the execution")
+        for _ in range(defered_errors.qsize()):
+            j, e = defered_errors.get()
+            warnings.warn(repr(e))
+            warnings.warn(j)
+        raise Err("Execution failed.")
+
+
+def _collect_phonies(job_of_target, deps_of_phony, f_of_phony, descs_of_phony):
     for target, deps in deps_of_phony.items():
         _set_unique(
             job_of_target, target,
-            _PhonyJob(f_of_phony.get(target, _do_nothing), [target], deps),
+            _PhonyJob(f_of_phony.get(target, _do_nothing), [target], deps, descs_of_phony[target]),
         )
 
 
@@ -310,50 +385,6 @@ def _make_graph(
             current_call_chain,
         )
     j.unique_ds or leaf_jobs.append(j)
-
-
-def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs):
-    defered_errors = queue.Queue()
-    tp = _ThreadPool(dependent_jobs, defered_errors, keep_going, n_jobs)
-    tp.push_jobs(jobs)
-    tp.wait()
-    if defered_errors.qsize() > 0:
-        warnings.warn("Following errors have thrown during the execution")
-        for _ in range(defered_errors.qsize()):
-            j, e = defered_errors.get()
-            warnings.warn(repr(e))
-            warnings.warn(j)
-        raise Err("Execution failed.")
-
-
-def _parse_argv(argv):
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "targets",
-        nargs="*",
-    )
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {version}",
-    )
-    parser.add_argument(
-        "-j", "--jobs",
-        type=int,
-        default=1,
-        help="Number of parallel external jobs.",
-    )
-    parser.add_argument(
-        "-k", "--keep-going",
-        action="store_true",
-        default=False,
-        help="Keep going unrelated jobs even if some jobs fail.",
-    )
-    args = parser.parse_args(argv)
-    assert args.jobs > 0
-    if not args.targets:
-        args.targets.append("all")
-    return args
 
 
 def _set_unique(d, k, v):
