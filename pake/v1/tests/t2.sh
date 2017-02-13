@@ -31,7 +31,7 @@ import subprocess
 import sys
 import time
 
-import pake
+import pake.v1 as pakevx
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -39,11 +39,11 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-__dsl = pake.DSL()
+__dsl = pakevx.DSL()
 file = __dsl.file
 phony = __dsl.phony
-sh = pake.sh
-rm = pake.rm
+sh = pakevx.sh
+rm = pakevx.rm
 
 
 nx = 7
@@ -56,7 +56,7 @@ ys = [f"y{i}" for i in range(ny)]
 zs = [f"z{i}" for i in range(nz)]
 
 
-@phony("default", xs)
+@phony("all", xs)
 def _(j):
     # print(j)
     time.sleep(dt)

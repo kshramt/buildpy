@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import os
+import re
 import subprocess
 import sys
 
@@ -19,40 +20,46 @@ sh = pake.sh
 rm = pake.rm
 
 
-all_files = sh("git ls-files -z", stdout=subprocess.PIPE).stdout.split("\0")
-tests_sh_files = [path for path in all_files if path.startswith(f"tests{os.path.sep}") and path.endswith(".sh")]
-tests_py_files = [path for path in all_files if path.startswith(f"tests{os.path.sep}") and path.endswith(".py")]
-pake_py_files = [path for path in all_files if path.startswith(f"pake{os.path.sep}") and path.endswith(".py")]
+all_files = set(sh("git ls-files -z", stdout=subprocess.PIPE).stdout.split("\0"))
+py_files = set(path for path in all_files if path.endswith(".py"))
+pake_files =set(path for path in all_files if path.startswith(os.path.join("pake", "v")))
+vs = set(path.split(os.path.sep)[1] for path in pake_files)
+test_files = set(path for path in pake_files if re.match(os.path.join("^pake", "v[0-9]+", "tests"), path))
+
+pake_py_files = list(py_files.intersection(pake_files) - test_files)
 
 
 def let():
-    phony("default", ["check"])
+    phony("all", ["check"])
 
-    def let():
-        for test_sh in tests_sh_files:
-            test_sh_done = test_sh + ".done"
-            phony("check", [test_sh_done])
+    for v in vs:
+        v_files = [path for path in all_files if path.startswith(os.path.join("pake", v))]
+        v_test_files = [path for path in v_files if path.startswith(os.path.join("pake", v, "tests"))]
+        def let():
+            for test_sh in [path for path in v_test_files if path.endswith(".sh")]:
+                test_sh_done = test_sh + ".done"
+                phony("check", [test_sh_done])
 
-            @file([test_sh_done], [test_sh] + pake_py_files)
-            def _(j):
-                sh(f"""
-                {j.ds[0]}
-                touch {j.ts[0]}
-                """)
-    let()
+                @file([test_sh_done], [test_sh] + pake_py_files)
+                def _(j):
+                    sh(f"""
+                    {j.ds[0]}
+                    touch {j.ts[0]}
+                    """)
+        let()
 
-    def let():
-        for test_py in tests_py_files:
-            test_py_done = test_py + ".done"
-            phony("check", [test_py_done])
+        def let():
+            for test_py in [path for path in v_test_files if path.endswith(".py")]:
+                test_py_done = test_py + ".done"
+                phony("check", [test_py_done])
 
-            @file([test_py_done], [test_py] + pake_py_files)
-            def _(j):
-                sh(f"""
-                {os.environ["PYTHON"]} {j.ds[0]}
-                touch {j.ts[0]}
-                """)
-    let()
+                @file([test_py_done], [test_py] + pake_py_files)
+                def _(j):
+                    sh(f"""
+                    {os.environ["PYTHON"]} {j.ds[0]}
+                    touch {j.ts[0]}
+                    """)
+        let()
 let()
 
 

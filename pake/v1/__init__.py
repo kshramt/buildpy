@@ -7,8 +7,7 @@ import sys
 import threading
 import warnings
 
-
-__version__ = "0.1.0"
+version = "0.1.0"
 
 
 class DSL:
@@ -285,15 +284,15 @@ def _make_graph(
         call_chain,
 ):
     if target in call_chain:
-        raise Err(f"A circular dependency detected: {repr(target)} for {repr(call_chain)}")
+        raise Err(f"A circular dependency detected: {target} for {repr(call_chain)}")
     if target not in job_of_target:
         assert target not in phonies
         if os.path.lexists(target):
             @file([target], [])
             def _(j):
-                raise Err(f"Must not happen: job for leaf node {repr(target)} called")
+                raise Err(f"Must not happen: job for leaf node {target} called")
         else:
-            raise Err(f"No rule to make {repr(target)}")
+            raise Err(f"No rule to make {target}")
     j = job_of_target[target]
     if j.visited:
         return
@@ -336,7 +335,7 @@ def _parse_argv(argv):
     parser.add_argument(
         "--version",
         action="version",
-        version=f"%(prog)s {__version__}",
+        version=f"%(prog)s {version}",
     )
     parser.add_argument(
         "-j", "--jobs",
@@ -353,12 +352,13 @@ def _parse_argv(argv):
     args = parser.parse_args(argv)
     assert args.jobs > 0
     if not args.targets:
-        args.targets.append("default")
+        args.targets.append("all")
     return args
 
 
 def _set_unique(d, k, v):
-    assert k not in d
+    if k in d:
+        raise Err(f"{k} in {d}")
     d[k] = v
 
 
