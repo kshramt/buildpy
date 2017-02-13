@@ -75,7 +75,7 @@ class Err(Exception):
 def sh(s, stdout=None):
     print(s, file=sys.stderr)
     return subprocess.run(
-        "export ff=1\n" + s,
+        s,
         shell=True,
         check=True,
         env=os.environ,

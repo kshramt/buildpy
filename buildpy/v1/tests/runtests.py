@@ -2,12 +2,12 @@
 
 import sys
 
-import pake.v1 as pakevx
+import buildpy.v1 as buildpyvx
 
 
 def main(argv):
     def let():
-        s = pakevx._TSet()
+        s = buildpyvx._TSet()
         s.add(s.add(s.add(1)))
         assert len(s) == 2
         s.remove(s.remove(1))

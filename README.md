@@ -1,7 +1,7 @@
-# pake
+# BuildPy
 
-I wrote pake to manage data analysis pipelines.
-pake supports following features:
+I wrote BuildPy to manage data analysis pipelines.
+BuildPy has following features:
 
 - Parallel processing (similar to `-j` option of Make)
 - Generation of multiple targets with a single job
@@ -11,4 +11,4 @@ pake supports following features:
 - Load-average based control of number of parallel jobs (similar to `-l` option of Make)
 - Machine-readable output of the dependency graph (similar to `-P` option of Rake)
 
-Please see [`./pakefile.py`](./pakefile.py) and `pake/v*/tests/*.sh` for examples.
+Please see [`./build.py`](./build.py) and `buildpy/v*/tests/*.sh` for examples.

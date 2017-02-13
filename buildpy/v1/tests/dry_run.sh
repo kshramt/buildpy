@@ -1,5 +1,5 @@
 #!/bin/bash
-# @(#) -P
+# @(#) --dry-run
 
 # set -xv
 set -o nounset
@@ -24,14 +24,14 @@ trap finalize EXIT
 cd "$tmp_dir"
 
 
-cat <<EOF > pakefile.py
+cat <<EOF > build.py
 #!/usr/bin/python
 
 import os
 import subprocess
 import sys
 
-import pake.v1 as pakevx
+import buildpy.v1 as buildpyvx
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -39,11 +39,11 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-__dsl = pakevx.DSL()
+__dsl = buildpyvx.DSL()
 file = __dsl.file
 phony = __dsl.phony
-sh = pakevx.sh
-rm = pakevx.rm
+sh = buildpyvx.sh
+rm = buildpyvx.rm
 
 
 phony("all", ["check"], desc="Default target")
@@ -51,44 +51,44 @@ phony("check", ["t1.done", "t2.done"], desc="Run tests")
 
 @file("t2.done", ["t2"], desc="Test 2")
 def _(j):
-    pass
+    sh(f"touch {' '.join(j.ts)}")
 
 @file("t1.done", ["t1"], desc="Test 1")
 def _(j):
-    pass
+    sh(f"touch {' '.join(j.ts)}")
 
 @file(["t2", "t1"], ["u2", "u1"])
 def _(j):
-    pass
+    sh(f"touch {' '.join(j.ts)}")
 
 
 if __name__ == '__main__':
     __dsl.main(sys.argv)
 EOF
 
-cat <<EOF > expect
-all
-	check
-
+cat <<EOF > expect.1
 check
 	t1.done
 	t2.done
 
-t1.done
-	t1
+all
+	check
 
-t2
-t1
-	u2
-	u1
+EOF
 
-t2.done
-	t2
-
+cat <<EOF > expect.2
+touch t2 t1
+touch t2.done
+touch t1.done
 EOF
 
 touch u1 u2
 
-"$PYTHON" pakefile.py -P > actual
+{
+   "$PYTHON" build.py
+   touch t1
+   "$PYTHON" build.py -n
+} 1> actual.1 2> actual.2
 
-colordiff expect actual
+colordiff expect.1 actual.1
+colordiff expect.2 actual.2

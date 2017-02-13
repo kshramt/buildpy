@@ -1,12 +1,12 @@
 from setuptools import setup
 
 setup(
-    name="pake",
+    name="buildpy",
     version="0.1.0",
     description="Make in Python",
-    url="https://github.com/kshramt/pake",
+    url="https://github.com/kshramt/buildpy",
     author="kshramt",
     license="GPLv3",
-    packages=["pake"],
+    packages=["buildpy"],
     zip_safe=True,
 )

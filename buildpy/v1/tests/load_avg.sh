@@ -1,5 +1,5 @@
 #!/bin/bash
-# @(#) -j
+# @(#) -l
 
 # set -xv
 set -o nounset
@@ -24,7 +24,7 @@ trap finalize EXIT
 cd "$tmp_dir"
 
 
-cat <<EOF > pakefile.py
+cat <<EOF > build.py
 #!/usr/bin/python
 
 import os
@@ -32,7 +32,7 @@ import subprocess
 import sys
 import time
 
-import pake.v1 as pakevx
+import buildpy.v1 as buildpyvx
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -40,21 +40,27 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-__dsl = pakevx.DSL()
+__dsl = buildpyvx.DSL()
 file = __dsl.file
 phony = __dsl.phony
-sh = pakevx.sh
-rm = pakevx.rm
+sh = buildpyvx.sh
+rm = buildpyvx.rm
 
 
-nx = 7
-ny = 7
-nz = 7
+nx = 3
+ny = 3
+nz = 3
 dt = 0.1
 
 xs = [f"x{i}" for i in range(nx)]
 ys = [f"y{i}" for i in range(ny)]
 zs = [f"z{i}" for i in range(nz)]
+
+
+def getloadavg():
+    return (3, None, None)
+
+os.getloadavg = getloadavg
 
 
 @phony("all", xs)
@@ -85,7 +91,7 @@ if __name__ == '__main__':
     t1 = time.time()
     __dsl.main(sys.argv)
     t2 = time.time()
-    assert t2 - t1 < dt*(1 + nx*(1 + ny*(1 + nz)))/10
+    assert t2 - t1 > dt*(1 + nx*(1 + ny*(1 + nz)))
 EOF
 
-"$PYTHON" pakefile.py -j20
+"$PYTHON" build.py -j20 -l2
