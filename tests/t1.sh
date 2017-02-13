@@ -39,7 +39,7 @@ os.environ["PYTHON"] = sys.executable
 
 
 __dsl = pake.DSL()
-task = __dsl.task
+file = __dsl.file
 phony = __dsl.phony
 sh = pake.sh
 rm = pake.rm

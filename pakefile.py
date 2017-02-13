@@ -13,7 +13,7 @@ os.environ["PYTHON"] = sys.executable
 
 
 __dsl = pake.DSL()
-task = __dsl.task
+file = __dsl.file
 phony = __dsl.phony
 sh = pake.sh
 rm = pake.rm
@@ -33,7 +33,7 @@ def let():
             test_sh_done = test_sh + ".done"
             phony("check", [test_sh_done])
 
-            @task([test_sh_done], [test_sh] + pake_py_files)
+            @file([test_sh_done], [test_sh] + pake_py_files)
             def _(j):
                 sh(f"""
                 {j.ds[0]}
@@ -46,7 +46,7 @@ def let():
             test_py_done = test_py + ".done"
             phony("check", [test_py_done])
 
-            @task([test_py_done], [test_py] + pake_py_files)
+            @file([test_py_done], [test_py] + pake_py_files)
             def _(j):
                 sh(f"""
                 {os.environ["PYTHON"]} {j.ds[0]}

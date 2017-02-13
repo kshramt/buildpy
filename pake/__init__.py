@@ -17,7 +17,7 @@ class DSL:
         self._f_of_phony = dict()
         self._deps_of_phony = dict()
 
-    def task(self, targets, deps):
+    def file(self, targets, deps):
         def _(f):
             j = _FileJob(f, targets, deps)
             for t in targets:
@@ -44,7 +44,7 @@ class DSL:
                 leaf_jobs,
                 target,
                 self._job_of_target,
-                self.task,
+                self.file,
                 self._deps_of_phony,
                 _nil,
             )
@@ -280,7 +280,7 @@ def _make_graph(
         leaf_jobs,
         target,
         job_of_target,
-        task,
+        file,
         phonies,
         call_chain,
 ):
@@ -289,7 +289,7 @@ def _make_graph(
     if target not in job_of_target:
         assert target not in phonies
         if os.path.lexists(target):
-            @task([target], [])
+            @file([target], [])
             def _(j):
                 raise Err(f"Must not happen: job for leaf node {repr(target)} called")
         else:
@@ -306,7 +306,7 @@ def _make_graph(
             leaf_jobs,
             dep,
             job_of_target,
-            task,
+            file,
             phonies,
             current_call_chain,
         )
