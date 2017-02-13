@@ -18,6 +18,8 @@ class DSL:
         self._descs_of_phony = dict()
 
     def file(self, targets, deps, desc=None):
+        targets = _listize(targets)
+        deps = _listize(deps)
         def _(f):
             j = _FileJob(f, targets, deps, [desc])
             for t in targets:
@@ -40,11 +42,14 @@ class DSL:
             keep_going,
             n_jobs,
             descriptions,
+            dependencies,
     ):
         assert n_jobs > 0
         _collect_phonies(self._job_of_target, self._deps_of_phony, self._f_of_phony, self._descs_of_phony)
         if descriptions:
             _print_descriptions(self._job_of_target)
+        if dependencies:
+            _print_dependencies(self._job_of_target)
         else:
             dependent_jobs = dict()
             leaf_jobs = []
@@ -67,6 +72,7 @@ class DSL:
             args.keep_going,
             args.jobs,
             args.descriptions,
+            args.dependencies,
         )
 
 
@@ -102,8 +108,8 @@ def rm(path):
 class _Job:
     def __init__(self, f, ts, ds, descs):
         self.f = f
-        self.ts = ts
-        self.ds = ds
+        self.ts = _listize(ts)
+        self.ds = _listize(ds)
         self.descs = [desc for desc in descs if desc is not None]
         self.unique_ds = _unique(ds)
         self._n_rest = len(self.unique_ds)
@@ -111,7 +117,7 @@ class _Job:
         self._lock = threading.Lock()
 
     def __repr__(self):
-        return f"{type(self).__name__}({self.ts}, {self.ds})"
+        return f"{type(self).__name__}({repr(self.ts)}, {repr(self.ds)}, descs={repr(self.descs)})"
 
     def rm_targets(self):
         pass
@@ -312,6 +318,12 @@ def _parse_argv(argv):
         default=False,
         help="Print descriptions, then exit.",
     )
+    parser.add_argument(
+        "-P", "--dependencies",
+        action="store_true",
+        default=False,
+        help="Print dependencies, then exit.",
+    )
     args = parser.parse_args(argv)
     assert args.jobs > 0
     if not args.targets:
@@ -325,6 +337,15 @@ def _print_descriptions(job_of_target):
         for desc in job_of_target[target].descs:
             for l in desc.split("\t"):
                 print("\t" + l)
+
+
+def _print_dependencies(job_of_target):
+    for j in sorted(set(job_of_target.values()), key=lambda j: j.ts):
+        for t in j.ts:
+            print(t)
+        for d in j.ds:
+            print("\t" + d)
+        print()
 
 
 def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs):
@@ -343,9 +364,11 @@ def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs):
 
 def _collect_phonies(job_of_target, deps_of_phony, f_of_phony, descs_of_phony):
     for target, deps in deps_of_phony.items():
+        targets = _listize(target)
+        deps = _listize(deps)
         _set_unique(
             job_of_target, target,
-            _PhonyJob(f_of_phony.get(target, _do_nothing), [target], deps, descs_of_phony[target]),
+            _PhonyJob(f_of_phony.get(target, _do_nothing), targets, deps, descs_of_phony[target]),
         )
 
 
@@ -387,9 +410,17 @@ def _make_graph(
     j.unique_ds or leaf_jobs.append(j)
 
 
+def _listize(x):
+    if isinstance(x, list):
+        return x
+    if isinstance(x, str):
+        return [x]
+    raise NotImplementedError("_listize({x}: {typeof(x)})")
+
+
 def _set_unique(d, k, v):
     if k in d:
-        raise Err(f"{k} in {d}")
+        raise Err(f"{repr(k)} in {repr(d)}")
     d[k] = v
 
 
