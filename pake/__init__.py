@@ -33,12 +33,7 @@ class DSL:
             return _do_nothing
         return _
 
-    def finish(
-            self,
-            targets,
-            keep_going,
-            n_jobs,
-    ):
+    def finish(self, targets, keep_going, n_jobs):
         assert n_jobs > 0
         _collect_phonies(self._job_of_target, self._deps_of_phony, self._f_of_phony)
         dependent_jobs = dict()
@@ -57,11 +52,7 @@ class DSL:
 
     def main(self, argv):
         args = _parse_argv(argv[1:])
-        self.finish(
-            args.targets,
-            args.keep_going,
-            args.jobs,
-        )
+        self.finish(args.targets, args.keep_going, args.jobs)
 
 
 class Err(Exception):
