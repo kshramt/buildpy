@@ -30,9 +30,20 @@ pake_py_files = list(py_files.intersection(pake_files) - test_files)
 
 
 def let():
-    phony("all", ["check"], "The default target")
-    phony("check", [], desc="Run tests")
+    phony("all", [], desc="The default target")
 
+    @phony("sdist", [], desc="Make distribution file")
+    def _(j):
+        sh(f"""
+        git ls-files |
+        while read line
+        do
+            echo include "$line"
+        done >| MANIFEST.in
+        {os.environ["PYTHON"]} setup.py sdist
+        """)
+
+    phony("check", [], desc="Run tests")
     for v in vs:
         v_files = [path for path in all_files if path.startswith(os.path.join("pake", v))]
         v_test_files = [path for path in v_files if path.startswith(os.path.join("pake", v, "tests"))]
