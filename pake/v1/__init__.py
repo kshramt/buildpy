@@ -39,25 +39,18 @@ class DSL:
             return _do_nothing
         return _
 
-    def finish(
-            self,
-            targets,
-            keep_going,
-            n_jobs,
-            load_average,
-            descriptions,
-            dependencies,
-    ):
-        assert n_jobs > 0
+    def finish(self, args):
+        assert args.jobs > 0
+        assert args.load_average > 0
         _collect_phonies(self._job_of_target, self._deps_of_phony, self._f_of_phony, self._descs_of_phony)
-        if descriptions:
+        if args.descriptions:
             _print_descriptions(self._job_of_target)
-        if dependencies:
+        elif args.dependencies:
             _print_dependencies(self._job_of_target)
         else:
             dependent_jobs = dict()
             leaf_jobs = []
-            for target in targets:
+            for target in args.targets:
                 _make_graph(
                     dependent_jobs,
                     leaf_jobs,
@@ -67,18 +60,11 @@ class DSL:
                     self._deps_of_phony,
                     _nil,
                 )
-            _process_jobs(leaf_jobs, dependent_jobs, keep_going, n_jobs, load_average)
+            _process_jobs(leaf_jobs, dependent_jobs, args.keep_going, args.jobs, args.load_average, args.dry_run)
 
     def main(self, argv):
         args = _parse_argv(argv[1:])
-        self.finish(
-            args.targets,
-            args.keep_going,
-            args.jobs,
-            args.load_average,
-            args.descriptions,
-            args.dependencies,
-        )
+        self.finish(args)
 
 
 class Err(Exception):
@@ -120,6 +106,7 @@ class _Job:
         self._n_rest = len(self.unique_ds)
         self.visited = False
         self._lock = threading.Lock()
+        self._forced = False
 
     def __repr__(self):
         return f"{type(self).__name__}({repr(self.ts)}, {repr(self.ds)}, descs={repr(self.descs)})"
@@ -142,6 +129,12 @@ class _Job:
         with self._lock:
             self._n_rest = x
 
+    def write(self, file=sys.stdout):
+        for t in self.ts:
+            print(t, file=file)
+        for d in self.ds:
+            print("\t" + d, file=file)
+
 
 class _PhonyJob(_Job):
     def __init__(self, f, ts, ds, descs):
@@ -159,6 +152,8 @@ class _FileJob(_Job):
             rm(t)
 
     def need_update(self):
+        if self._forced:
+            return self._forced
         stat_ds = [os.stat(d) for d in self.unique_ds]
         if not all(os.path.lexists(t) for t in self.ts):
             return True
@@ -168,13 +163,14 @@ class _FileJob(_Job):
 
 
 class _ThreadPool:
-    def __init__(self, dependent_jobs, defered_errors, keep_going, n_max, load_average):
+    def __init__(self, dependent_jobs, defered_errors, keep_going, n_max, load_average, dry_run):
         assert n_max > 0
         self._dependent_jobs = dependent_jobs
         self._defered_errors = defered_errors
         self._keep_going = keep_going
         self._n_max = n_max
         self._load_average = load_average
+        self._dry_run = dry_run
         self._threads = _TSet()
         self._unwaited_threads = _TSet()
         self._threads_loc = threading.Lock()
@@ -218,7 +214,8 @@ class _ThreadPool:
                     break
                 assert j.n_rest() == 0
                 got_error = False
-                if j.need_update():
+                need_update = j.need_update()
+                if need_update:
                     assert self._n_running.val() >= 0
                     if math.isfinite(self._load_average):
                         while (
@@ -228,7 +225,11 @@ class _ThreadPool:
                             time.sleep(1)
                     self._n_running.inc()
                     try:
-                        j.f(j)
+                        if self._dry_run:
+                            j.write()
+                            print()
+                        else:
+                            j.f(j)
                     except Exception as e:
                         got_error = True
                         warnings.warn(repr(j))
@@ -246,6 +247,7 @@ class _ThreadPool:
                         for dj in self._dependent_jobs.get(t, ()):
                             dj.dec_n_rest()
                             if dj.n_rest() == 0:
+                                dj._forced = need_update and self._dry_run
                                 self.push_job(dj)
         except Exception as e:
             warnings.warn(repr(e))
@@ -372,6 +374,12 @@ def _parse_argv(argv):
         default=False,
         help="Print dependencies, then exit.",
     )
+    parser.add_argument(
+        "-n", "--dry-run",
+        action="store_true",
+        default=False,
+        help="Dry-run.",
+    )
     args = parser.parse_args(argv)
     assert args.jobs > 0
     assert args.load_average > 0
@@ -390,16 +398,13 @@ def _print_descriptions(job_of_target):
 
 def _print_dependencies(job_of_target):
     for j in sorted(set(job_of_target.values()), key=lambda j: j.ts):
-        for t in j.ts:
-            print(t)
-        for d in j.ds:
-            print("\t" + d)
+        j.write()
         print()
 
 
-def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, load_average):
+def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, load_average, dry_run):
     defered_errors = queue.Queue()
-    tp = _ThreadPool(dependent_jobs, defered_errors, keep_going, n_jobs, load_average)
+    tp = _ThreadPool(dependent_jobs, defered_errors, keep_going, n_jobs, load_average, dry_run)
     tp.push_jobs(jobs)
     tp.wait()
     if defered_errors.qsize() > 0:
