@@ -14,13 +14,15 @@ version = "1.1.0"
 
 class DSL:
     @staticmethod
-    def sh(s, stdout=None):
+    def sh(s, stdout=None, env=None):
         print(s, file=sys.stderr)
+        if env is None:
+            env = os.environ
         return subprocess.run(
             s,
             shell=True,
             check=True,
-            env=os.environ,
+            env=env,
             executable="/bin/bash",
             stdout=stdout,
             universal_newlines=True,
