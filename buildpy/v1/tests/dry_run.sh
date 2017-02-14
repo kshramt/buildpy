@@ -89,6 +89,8 @@ touch u1 u2
 
 {
    "$PYTHON" build.py
+   # HFS has only 1 s time resolution
+   sleep 1.1
    touch t1
    "$PYTHON" build.py -n
 } 1> actual.1 2> actual.2
