@@ -9,7 +9,7 @@ import threading
 import time
 import warnings
 
-version = "0.1.0"
+version = "1.0.0"
 
 
 class DSL:
