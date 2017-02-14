@@ -67,6 +67,9 @@ if __name__ == '__main__':
 EOF
 
 cat <<EOF > expect.1
+t1.done
+	t1
+
 check
 	t1.done
 	t2.done
