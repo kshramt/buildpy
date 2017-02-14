@@ -174,18 +174,19 @@ class _ThreadPool:
         self._threads = _TSet()
         self._unwaited_threads = _TSet()
         self._threads_loc = threading.Lock()
-        self._queue = queue.Queue()
+        self._stack = _TStack()
         self._n_running = _TInt(0)
 
     def push_jobs(self, jobs):
         # pre-load `jobs` to avoid a situation where no active thread exist while a job is enqueued
-        for i in range(len(jobs) - self._n_max):
-            self._queue.put(jobs[-(i + 1)])
-        for j in jobs[:self._n_max]:
-            self.push_job(j)
+        rem = len(jobs) - self._n_max
+        for i in range(rem):
+            self._stack.put(jobs[i])
+        for i in range(rem, len(jobs)):
+            self.push_job(jobs[i])
 
     def push_job(self, j):
-        self._queue.put(j)
+        self._stack.put(j)
         with self._threads_loc:
             if (
                     len(self._threads) < 1 or (
@@ -209,7 +210,7 @@ class _ThreadPool:
     def _worker(self):
         try:
             while True:
-                j = self._deq()
+                j = self._pop_job()
                 if not j:
                     break
                 assert j.n_rest() == 0
@@ -261,10 +262,10 @@ class _ThreadPool:
                 except:
                     pass
 
-    def _deq(self):
+    def _pop_job(self):
         try:
-            return self._queue.get(block=True, timeout=0.02)
-        except queue.Empty:
+            return self._stack.pop(block=True, timeout=0.02)
+        except _TStack.Empty:
             return False
 
     def _die(self, e):
@@ -292,6 +293,33 @@ class _TSet:
     def pop(self):
         with self._lock:
             return self._set.pop()
+
+
+class _TStack:
+    class Empty(Exception):
+        def __init__(self):
+            pass
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._stack = []
+
+    def put(self, x):
+        with self._lock:
+            self._stack.append(x)
+
+    def pop(self, block=True, timeout=-1):
+        success = self._lock.acquire(blocking=block, timeout=timeout)
+        if success:
+            if self._stack:
+                ret = self._stack.pop()
+            else:
+                success = False
+        self._lock.release()
+        if success:
+            return ret
+        else:
+            raise self.Empty()
 
 
 class _TInt:
