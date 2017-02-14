@@ -13,6 +13,27 @@ version = "0.1.0"
 
 
 class DSL:
+    @classmethod
+    def sh(cls, s, stdout=None):
+        print(s, file=sys.stderr)
+        return subprocess.run(
+            s,
+            shell=True,
+            check=True,
+            env=os.environ,
+            executable="/bin/bash",
+            stdout=stdout,
+            universal_newlines=True,
+        )
+
+    @classmethod
+    def rm(cls, path):
+        print(f"os.remove({repr(path)})", file=sys.stderr)
+        try:
+            os.remove(path)
+        except:
+            pass
+
     def __init__(self):
         self._job_of_target = dict()
         self._f_of_phony = dict()
@@ -70,27 +91,6 @@ class DSL:
 class Err(Exception):
     def __init__(self, msg=""):
         self.msg=msg
-
-
-def sh(s, stdout=None):
-    print(s, file=sys.stderr)
-    return subprocess.run(
-        s,
-        shell=True,
-        check=True,
-        env=os.environ,
-        executable="/bin/bash",
-        stdout=stdout,
-        universal_newlines=True,
-    )
-
-
-def rm(path):
-    print(f"os.remove({repr(path)})", file=sys.stderr)
-    try:
-        os.remove(path)
-    except:
-        pass
 
 
 # Internal use only.

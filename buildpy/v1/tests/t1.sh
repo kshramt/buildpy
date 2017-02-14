@@ -31,7 +31,7 @@ import os
 import subprocess
 import sys
 
-import buildpy.v1 as buildpyvx
+import buildpy
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -39,11 +39,11 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-__dsl = buildpyvx.DSL()
+__dsl = buildpy.v1.DSL()
 file = __dsl.file
 phony = __dsl.phony
-sh = buildpyvx.sh
-rm = buildpyvx.rm
+sh = __dsl.sh
+rm = __dsl.rm
 
 
 def let():

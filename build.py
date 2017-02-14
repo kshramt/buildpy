@@ -16,8 +16,8 @@ os.environ["PYTHON"] = sys.executable
 __dsl = buildpy.DSL()
 file = __dsl.file
 phony = __dsl.phony
-sh = buildpy.sh
-rm = buildpy.rm
+sh = __dsl.sh
+rm = __dsl.rm
 
 
 all_files = set(sh("git ls-files -z", stdout=subprocess.PIPE).stdout.split("\0"))
