@@ -46,7 +46,7 @@ sh = __dsl.sh
 rm = __dsl.rm
 
 
-phony("all", ["check"], desc="Default target")
+phony("all", "check", desc="Default target")
 phony("check", ["t1.done", "t2.done"], desc="Run tests")
 
 @file("t2.done", ["t2"], desc="Test 2")

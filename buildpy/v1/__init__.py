@@ -54,7 +54,7 @@ class DSL:
         return _
 
     def phony(self, target, deps, desc=None):
-        self._deps_of_phony.setdefault(target, []).extend(deps)
+        self._deps_of_phony.setdefault(target, []).extend(_listize(deps))
         self._descs_of_phony.setdefault(target, []).append(desc)
 
         def _(f):
@@ -198,8 +198,9 @@ class _ThreadPool:
             ):
                 t = threading.Thread(target=self._worker, daemon=True)
                 self._threads.add(t)
-                self._unwaited_threads.add(t)
                 t.start()
+                # A thread should be `start`ed before `join`ed
+                self._unwaited_threads.add(t)
 
     def wait(self):
         while True:
