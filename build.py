@@ -20,7 +20,14 @@ sh = __dsl.sh
 rm = __dsl.rm
 
 
-all_files = set(sh("git ls-files -z", stdout=subprocess.PIPE).stdout.split("\0"))
+all_files = set(
+    subprocess.run(
+        ["git", "ls-files", "-z"],
+        check=True,
+        universal_newlines=True,
+        stdout=subprocess.PIPE,
+    ).stdout.split("\0")
+)
 py_files = set(path for path in all_files if path.endswith(".py"))
 buildpy_files =set(path for path in all_files if path.startswith(os.path.join("buildpy", "v")))
 vs = set(path.split(os.path.sep)[1] for path in buildpy_files)

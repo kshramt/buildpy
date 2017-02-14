@@ -78,8 +78,8 @@ EOF
 
 cat <<EOF > expect.2
 touch t2 t1
-touch t2.done
 touch t1.done
+touch t2.done
 EOF
 
 touch u1 u2
@@ -90,5 +90,5 @@ touch u1 u2
    "$PYTHON" build.py -n
 } 1> actual.1 2> actual.2
 
-colordiff expect.1 actual.1
-colordiff expect.2 actual.2
+colordiff -u expect.1 actual.1
+colordiff -u expect.2 actual.2
