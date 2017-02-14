@@ -155,7 +155,7 @@ class _FileJob(_Job):
 
     def need_update(self):
         if self._forced:
-            return self._forced
+            return True
         stat_ds = [os.stat(d) for d in self.unique_ds]
         if not all(os.path.lexists(t) for t in self.ts):
             return True
@@ -250,8 +250,8 @@ class _ThreadPool:
                         # top targets does not have dependent jobs
                         for dj in self._dependent_jobs.get(t, ()):
                             dj.dec_n_rest()
+                            dj._forced = dj._forced or (need_update and self._dry_run)
                             if dj.n_rest() == 0:
-                                dj._forced = need_update and self._dry_run
                                 self.push_job(dj)
         except Exception as e:
             warnings.warn(repr(e))
@@ -521,3 +521,7 @@ def _unique(xs):
 
 def _do_nothing(*_):
     pass
+
+
+def _dbg(*xs):
+    print("DBG:\t" + "\t".join(str(x) for x in xs), file=sys.stderr)
