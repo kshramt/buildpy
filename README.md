@@ -8,7 +8,7 @@ BuildPy has following features:
 - Dry-run (similar to `-n` option of Make)
 - Deferred error (similar to `-k` option of Make)
 - Description for jobs (similar to `desc` method of Rake)
-- Load-average based control of number of parallel jobs (similar to `-l` option of Make)
+- Load-average based control of the number of parallel jobs (similar to `-l` option of Make)
 - Machine-readable output of the dependency graph (similar to `-P` option of Rake)
 
 Please see [`./build.py`](./build.py) and `buildpy/v*/tests/*.sh` for examples.
