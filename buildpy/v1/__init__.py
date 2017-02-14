@@ -28,7 +28,7 @@ class DSL:
 
     @staticmethod
     def rm(path):
-        print(f"os.remove({repr(path)})", file=sys.stderr)
+        print("os.remove({})".format(repr(path)), file=sys.stderr)
         try:
             os.remove(path)
         except:
@@ -109,7 +109,7 @@ class _Job:
         self._forced = False
 
     def __repr__(self):
-        return f"{type(self).__name__}({repr(self.ts)}, {repr(self.ds)}, descs={repr(self.descs)})"
+        return "{}({}, {}, descs={})".format(type(self).__name__, repr(self.ts), repr(self.ds), repr(self.descs))
 
     def rm_targets(self):
         pass
@@ -139,7 +139,7 @@ class _Job:
 class _PhonyJob(_Job):
     def __init__(self, f, ts, ds, descs):
         if len(ts) != 1:
-            raise Err(f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}")
+            raise Err("PhonyJob with multiple targets is not supported: {}, {}, {}".format(f, ts, ds))
         super().__init__(f, ts, ds, descs)
 
 
@@ -370,7 +370,7 @@ def _parse_argv(argv):
     parser.add_argument(
         "--version",
         action="version",
-        version=f"%(prog)s {version}",
+        version="%(prog)s {}".format(version),
     )
     parser.add_argument(
         "-j", "--jobs",
@@ -464,15 +464,15 @@ def _make_graph(
         call_chain,
 ):
     if target in call_chain:
-        raise Err(f"A circular dependency detected: {target} for {repr(call_chain)}")
+        raise Err("A circular dependency detected: {} for {}".format(target, repr(call_chain)))
     if target not in job_of_target:
         assert target not in phonies
         if os.path.lexists(target):
             @file([target], [])
             def _(j):
-                raise Err(f"Must not happen: job for leaf node {target} called")
+                raise Err("Must not happen: job for leaf node {} called".format(target))
         else:
-            raise Err(f"No rule to make {target}")
+            raise Err("No rule to make {}".format(target))
     j = job_of_target[target]
     if j.visited:
         return
@@ -502,7 +502,7 @@ def _listize(x):
 
 def _set_unique(d, k, v):
     if k in d:
-        raise Err(f"{repr(k)} in {repr(d)}")
+        raise Err("{} in {}".format(repr(k), repr(d)))
     d[k] = v
 
 

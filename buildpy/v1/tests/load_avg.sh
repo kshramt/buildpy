@@ -52,9 +52,10 @@ ny = 3
 nz = 3
 dt = 0.1
 
-xs = [f"x{i}" for i in range(nx)]
-ys = [f"y{i}" for i in range(ny)]
-zs = [f"z{i}" for i in range(nz)]
+
+xs = ["x" + str(i) for i in range(nx)]
+ys = ["y" + str(i) for i in range(ny)]
+zs = ["z" + str(i) for i in range(nz)]
 
 
 def getloadavg():

@@ -41,14 +41,14 @@ def let():
 
     @phony("sdist", [], desc="Make distribution file")
     def _(j):
-        sh(f"""
+        sh("""
         git ls-files |
         while read line
         do
             echo include "$line"
         done >| MANIFEST.in
-        {os.environ["PYTHON"]} setup.py sdist
-        """)
+        {} setup.py sdist
+        """.format(os.environ["PYTHON"]))
 
     phony("check", [], desc="Run tests")
     for v in vs:
@@ -59,12 +59,12 @@ def let():
                 test_sh_done = test_sh + ".done"
                 phony("check", [test_sh_done])
 
-                @file([test_sh_done], [test_sh] + buildpy_py_files, desc=f"Test {test_sh}")
+                @file([test_sh_done], [test_sh] + buildpy_py_files, desc="Test {}".format(test_sh))
                 def _(j):
-                    sh(f"""
-                    {j.ds[0]}
-                    touch {j.ts[0]}
-                    """)
+                    sh("""
+                    {}
+                    touch {}
+                    """.format(j.ds[0], j.ts[0]))
         let()
 
         def let():
@@ -72,12 +72,12 @@ def let():
                 test_py_done = test_py + ".done"
                 phony("check", [test_py_done])
 
-                @file([test_py_done], [test_py] + buildpy_py_files, desc=f"Test {test_py}")
+                @file([test_py_done], [test_py] + buildpy_py_files, desc="Test {}".format(test_py))
                 def _(j):
-                    sh(f"""
-                    {os.environ["PYTHON"]} {j.ds[0]}
-                    touch {j.ts[0]}
-                    """)
+                    sh("""
+                    {} {}
+                    touch {}
+                    """.format(os.environ["PYTHON"], j.ds[0], j.ts[0]))
         let()
 let()
 

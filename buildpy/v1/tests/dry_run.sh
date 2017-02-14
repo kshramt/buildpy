@@ -51,15 +51,15 @@ phony("check", ["t1.done", "t2.done"], desc="Run tests")
 
 @file("t2.done", ["t2"], desc="Test 2")
 def _(j):
-    sh(f"touch {' '.join(j.ts)}")
+    sh("touch " + " ".join(j.ts))
 
 @file("t1.done", ["t1"], desc="Test 1")
 def _(j):
-    sh(f"touch {' '.join(j.ts)}")
+    sh("touch " + " ".join(j.ts))
 
 @file(["t2", "t1"], ["u2", "u1"])
 def _(j):
-    sh(f"touch {' '.join(j.ts)}")
+    sh("touch " + " ".join(j.ts))
 
 
 if __name__ == '__main__':
