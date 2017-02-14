@@ -13,8 +13,8 @@ version = "1.0.0"
 
 
 class DSL:
-    @classmethod
-    def sh(cls, s, stdout=None):
+    @staticmethod
+    def sh(s, stdout=None):
         print(s, file=sys.stderr)
         return subprocess.run(
             s,
@@ -26,8 +26,8 @@ class DSL:
             universal_newlines=True,
         )
 
-    @classmethod
-    def rm(cls, path):
+    @staticmethod
+    def rm(path):
         print(f"os.remove({repr(path)})", file=sys.stderr)
         try:
             os.remove(path)
@@ -149,7 +149,7 @@ class _FileJob(_Job):
 
     def rm_targets(self):
         for t in self.ts:
-            rm(t)
+            DSL.rm(t)
 
     def need_update(self):
         if self._forced:
