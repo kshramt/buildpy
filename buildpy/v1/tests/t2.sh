@@ -63,22 +63,28 @@ def _(j):
     time.sleep(dt)
 
 for x in xs:
-    @phony(x, [x + y for y in ys])
-    def _(j):
-        # print(j)
-        time.sleep(dt)
-
-    for y in ys:
-        @phony(x + y, [x + y + z for z in zs])
+    def let(x=x):
+        @phony(x, [x + y for y in ys])
         def _(j):
             # print(j)
             time.sleep(dt)
 
-        for z in zs:
-            @phony(x + y + z, [])
-            def _(j):
-                # print(j)
-                time.sleep(dt)
+        for y in ys:
+            def let(y=y):
+                @phony(x + y, [x + y + z for z in zs])
+                def _(j):
+                    # print(j)
+                    time.sleep(dt)
+
+                for z in zs:
+                    def let(z=z):
+                        @phony(x + y + z, [])
+                        def _(j):
+                            # print(j)
+                            time.sleep(dt)
+                    let()
+            let()
+    let()
 
 
 if __name__ == '__main__':
