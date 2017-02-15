@@ -108,7 +108,7 @@ class _Job:
         self._n_rest = len(self.unique_ds)
         self.visited = False
         self._lock = threading.Lock()
-        self._forced = False
+        self._forced = _TBool(False)
 
     def __repr__(self):
         return "{}({}, {}, descs={})".format(type(self).__name__, repr(self.ts), repr(self.ds), repr(self.descs))
@@ -154,7 +154,7 @@ class _FileJob(_Job):
             DSL.rm(t)
 
     def need_update(self):
-        if self._forced:
+        if self._forced.val():
             return True
         stat_ds = [os.stat(d) for d in self.unique_ds]
         if not all(os.path.lexists(t) for t in self.ts):
@@ -250,7 +250,7 @@ class _ThreadPool:
                         # top targets does not have dependent jobs
                         for dj in self._dependent_jobs.get(t, ()):
                             dj.dec_n_rest()
-                            dj._forced = dj._forced or (need_update and self._dry_run)
+                            dj._forced.self_or_eq(need_update and self._dry_run)
                             if dj.n_rest() == 0:
                                 self.push_job(dj)
         except Exception as e:
@@ -276,46 +276,56 @@ class _ThreadPool:
         sys.exit(e)
 
 
-class _TSet:
-    def __init__(self):
+class _T:
+    __slots__ = ("_lock", "_val")
+
+    def __init__(self, val):
         self._lock = threading.Lock()
-        self._set = set()
+        self._val = val
+
+    def val(self):
+        with self._lock:
+            return self._val
+
+
+class _TSet(_T):
+    def __init__(self):
+        super().__init__(set())
 
     def __len__(self):
         with self._lock:
-            return len(self._set)
+            return len(self._val)
 
     def add(self, x):
         with self._lock:
-            self._set.add(x)
+            self._val.add(x)
 
     def remove(self, x):
         with self._lock:
-            self._set.remove(x)
+            self._val.remove(x)
 
     def pop(self):
         with self._lock:
-            return self._set.pop()
+            return self._val.pop()
 
 
-class _TStack:
+class _TStack(_T):
     class Empty(Exception):
         def __init__(self):
             pass
 
     def __init__(self):
-        self._lock = threading.Lock()
-        self._stack = []
+        super().__init__([])
 
     def put(self, x):
         with self._lock:
-            self._stack.append(x)
+            self._val.append(x)
 
     def pop(self, block=True, timeout=-1):
         success = self._lock.acquire(blocking=block, timeout=timeout)
         if success:
-            if self._stack:
-                ret = self._stack.pop()
+            if self._val:
+                ret = self._val.pop()
             else:
                 success = False
         self._lock.release()
@@ -325,22 +335,26 @@ class _TStack:
             raise self.Empty()
 
 
-class _TInt:
-    def __init__(self, x):
-        self._x = x
-        self._lock = threading.Lock()
-
-    def val(self):
-        with self._lock:
-            return self._x
+class _TInt(_T):
+    def __init__(self, val):
+        super().__init__(val)
 
     def inc(self):
         with self._lock:
-            self._x += 1
+            self._val += 1
 
     def dec(self):
         with self._lock:
-            self._x -= 1
+            self._val -= 1
+
+
+class _TBool(_T):
+    def __init__(self, val):
+        super().__init__(val)
+
+    def self_or_eq(self, x):
+        with self._lock:
+            self._val = self._val or x
 
 
 class _Nil:
