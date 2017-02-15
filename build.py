@@ -57,28 +57,32 @@ def let():
             v_test_files = [path for path in v_files if path.startswith(os.path.join("buildpy", v, "tests"))]
             def let():
                 for test_sh in [path for path in v_test_files if path.endswith(".sh")]:
-                    test_sh_done = test_sh + ".done"
-                    phony("check", [test_sh_done])
+                    def let(test_sh=test_sh):
+                        test_sh_done = test_sh + ".done"
+                        phony("check", [test_sh_done])
 
-                    @file([test_sh_done], [test_sh] + buildpy_py_files, desc="Test {}".format(test_sh))
-                    def _(j):
-                        sh("""
-                        {}
-                        touch {}
-                        """.format(j.ds[0], j.ts[0]))
+                        @file([test_sh_done], [test_sh] + buildpy_py_files, desc="Test {}".format(test_sh))
+                        def _(j):
+                            sh("""
+                            {}
+                            touch {}
+                            """.format(j.ds[0], j.ts[0]))
+                    let()
             let()
 
             def let():
                 for test_py in [path for path in v_test_files if path.endswith(".py")]:
-                    test_py_done = test_py + ".done"
-                    phony("check", [test_py_done])
+                    def let(test_py=test_py):
+                        test_py_done = test_py + ".done"
+                        phony("check", [test_py_done])
 
-                    @file([test_py_done], [test_py] + buildpy_py_files, desc="Test {}".format(test_py))
-                    def _(j):
-                        sh("""
-                        {} {}
-                        touch {}
-                        """.format(os.environ["PYTHON"], j.ds[0], j.ts[0]))
+                        @file([test_py_done], [test_py] + buildpy_py_files, desc="Test {}".format(test_py))
+                        def _(j):
+                            sh("""
+                            {} {}
+                            touch {}
+                            """.format(os.environ["PYTHON"], j.ds[0], j.ts[0]))
+                    let()
             let()
         let()
 let()
