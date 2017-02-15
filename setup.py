@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="buildpy",
-    version="1.1.3",
+    version="1.1.4",
     description="Make in Python",
     url="https://github.com/kshramt/buildpy",
     author="kshramt",
