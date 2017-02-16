@@ -30,7 +30,7 @@ phony = dsl.phony
 sh = dsl.sh
 
 phony("all", ["test"])
-phony("test", ["main.exe.done"])
+phony("test", ["main.exe.log1", "main.exe.log2"])
 @file(["main.exe.log1", "main.exe.log2"], ["main.exe"])
 def _(j):
     # j.ts: list of targets
