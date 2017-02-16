@@ -19,6 +19,10 @@ pip install --user --upgrade buildpy
 
 The typical form of `build.py` is as follows:
 
+```bash
+python build.py all --jobs="$(nproc)" --keep-going
+```
+
 ```py
 import sys
 
