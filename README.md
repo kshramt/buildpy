@@ -17,4 +17,35 @@ BuildPy is available from [PyPI](https://pypi.python.org/pypi/buildpy):
 pip install --user --upgrade buildpy
 ```
 
-Please see [`./build.py`](./build.py) and `buildpy/v*/tests/*.sh` for examples.
+The typical form of `build.py` is as follows:
+
+```py
+import sys
+
+import buildpy
+
+dsl = buildpy.DSL()
+file = dsl.file
+phony = dsl.phony
+sh = dsl.sh
+
+phony("all", ["test"])
+phony("test", ["main.exe.done"])
+@file(["main.exe.log1", "main.exe.log2"], ["main.exe"])
+def _(j):
+    # j.ts: list of targets
+    # j.ds: list of dependencies
+    sh(f"./{j.ds[0]} 1> {j.ts[0]} 2> {j.ts[1]}")
+
+phony("all", ["build"])
+phony("build", ["main.exe"])
+
+@file("main.exe", ["main.c"])
+def _(j):
+    sh(f"gcc -o {j.ts[0]} {j.ds[0]}")
+
+if __name__ == '__main__':
+    dsl.main(sys.argv)
+```
+
+Please see [`./build.py`](./build.py) and `buildpy/v*/tests/*.sh` for more examples.
