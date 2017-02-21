@@ -28,9 +28,7 @@ cat <<EOF > build.py
 #!/usr/bin/python
 
 import os
-import subprocess
 import sys
-import time
 
 import buildpy
 
