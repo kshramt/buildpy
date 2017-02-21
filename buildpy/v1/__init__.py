@@ -181,7 +181,7 @@ class _ThreadPool:
 
     def push_jobs(self, jobs):
         # pre-load `jobs` to avoid a situation where no active thread exist while a job is enqueued
-        rem = len(jobs) - self._n_max
+        rem = max(len(jobs) - self._n_max, 0)
         for i in range(rem):
             self._stack.put(jobs[i])
         for i in range(rem, len(jobs)):
