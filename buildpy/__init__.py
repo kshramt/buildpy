@@ -1,7 +1,4 @@
 from .v1 import (
-    version,
+    __version__,
     DSL,
 )
-
-
-__version__ = version

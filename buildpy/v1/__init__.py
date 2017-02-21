@@ -9,7 +9,7 @@ import threading
 import time
 import warnings
 
-version = "1.1.0"
+__version__ = "1.1.5"
 
 
 class DSL:
@@ -387,7 +387,7 @@ def _parse_argv(argv):
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s {}".format(version),
+        version="%(prog)s {}".format(__version__),
     )
     parser.add_argument(
         "-j", "--jobs",
