@@ -1,5 +1,7 @@
 # BuildPy
 
+[![Build Status](https://travis-ci.org/kshramt/buildpy.svg?branch=master)](https://travis-ci.org/kshramt/buildpy)
+
 I wrote BuildPy to manage data analysis pipelines.
 BuildPy has following features:
 

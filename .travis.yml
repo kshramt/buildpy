@@ -1,0 +1,21 @@
+language: python
+sudo: false
+os:
+  - linux
+python:
+  - "3.5"
+  - "3.6"
+  - "nightly"
+notifications:
+    email: false
+install:
+  - python setup.py install
+script:
+  - python build.py check all $FLAGS
+env:
+  - FLAGS=-j100
+  - FLAGS=-j1
+addons:
+  apt:
+    packages:
+      - colordiff
