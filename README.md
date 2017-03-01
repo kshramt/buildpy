@@ -6,7 +6,7 @@ I wrote BuildPy to manage data analysis pipelines.
 BuildPy has following features:
 
 - Parallel processing (similar to the `-j` option of Make)
-- Generation of multiple targets with a single job
+- Correct handling of multiple outputs from a single command invocation
 - Dry-run (similar to the `-n` option of Make)
 - Deferred error (similar to the `-k` option of Make)
 - Description for jobs (similar to the `desc` method of Rake)
