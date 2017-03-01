@@ -2,8 +2,7 @@
 
 [![Build Status](https://travis-ci.org/kshramt/buildpy.svg?branch=master)](https://travis-ci.org/kshramt/buildpy)
 
-I wrote BuildPy to manage data analysis pipelines.
-BuildPy has following features:
+BuildPy was written to manage data analysis pipelines and has following features:
 
 - Parallel processing (similar to the `-j` option of Make)
 - Correct handling of multiple outputs from a single command invocation
