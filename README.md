@@ -76,7 +76,7 @@ def _(job):
     dsl.sh(f"diff {' '.join(job.ds)} 1>| {job.ts[0]} 2>| {job.ts[1]}")
 ```
 
-Like `task` method of Rake or `.PHONY` rule of Make, you are able to declare a job, which does not produce target files, by using `dsl.phony`.
+Like the `task` method of Rake or `.PHONY` rule of Make, you are able to declare a job, which does not produce target files, by using `dsl.phony`.
 `dsl.phony` is used as follows:
 
 ```py
