@@ -80,8 +80,8 @@ EOF
 
 cat <<EOF > expect.2
 touch t2 t1
-touch t1.done
 touch t2.done
+touch t1.done
 EOF
 
 touch u1 u2

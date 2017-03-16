@@ -79,12 +79,12 @@ if __name__ == '__main__':
 EOF
 
 cat <<EOF > expect
-x222
-x22
-x2
 x111
+x222
 x11
+x22
 x1
+x2
 all
 EOF
 

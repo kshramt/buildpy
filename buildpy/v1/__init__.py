@@ -176,19 +176,19 @@ class _ThreadPool:
         self._threads = _TSet()
         self._unwaited_threads = _TSet()
         self._threads_loc = threading.Lock()
-        self._stack = _TStack()
+        self._queue = queue.Queue()
         self._n_running = _TInt(0)
 
     def push_jobs(self, jobs):
         # pre-load `jobs` to avoid a situation where no active thread exist while a job is enqueued
         rem = max(len(jobs) - self._n_max, 0)
         for i in range(rem):
-            self._stack.put(jobs[i])
+            self._queue.put(jobs[i])
         for i in range(rem, len(jobs)):
             self.push_job(jobs[i])
 
     def push_job(self, j):
-        self._stack.put(j)
+        self._queue.put(j)
         with self._threads_loc:
             if (
                     len(self._threads) < 1 or (
@@ -267,8 +267,8 @@ class _ThreadPool:
 
     def _pop_job(self):
         try:
-            return self._stack.pop(block=True, timeout=0.02)
-        except _TStack.Empty:
+            return self._queue.get(block=True, timeout=0.02)
+        except queue.Empty:
             return False
 
     def _die(self, e):
