@@ -57,7 +57,7 @@ Please see [`./build.py`](./build.py) and `buildpy/v*/tests/*.sh` for more examp
 
 ## Usage
 
-After importing `buildpy` module, you need to make a DSL instance by `dsl = buildpy.DSL()`.
+After importing the `buildpy` module, please make a DSL instance by `dsl = buildpy.DSL()`.
 The instance, `dsl`, provides methods to be used to construct a dependency graph and to execute the declared jobs.
 `dsl.file` is used to declare the dependencies and the command to make target files.
 `dsl.file` is used as follows:
