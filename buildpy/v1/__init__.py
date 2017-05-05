@@ -514,7 +514,7 @@ def _listize(x):
         return x
     if isinstance(x, str):
         return [x]
-    raise NotImplementedError("_listize({x}: {typeof(x)})")
+    raise NotImplementedError("_listize({}: {})".format(repr(x), type(x)))
 
 
 def _set_unique(d, k, v):
