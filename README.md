@@ -2,13 +2,14 @@
 
 [![Build Status](https://travis-ci.org/kshramt/buildpy.svg?branch=master)](https://travis-ci.org/kshramt/buildpy)
 
-BuildPy was written to manage data analysis pipelines and has following features:
+BuildPy is a build tool to manage a data analysis pipeline.
+It has following features:
 
 - Parallel processing (similar to the `-j` option of Make)
-- Correct handling of multiple outputs from a single command invocation
+- Correct handling of generation of multiple output files from a single command invocation
 - Dry-run (similar to the `-n` option of Make)
 - Deferred error (similar to the `-k` option of Make)
-- Description for jobs (similar to the `desc` method of Rake)
+- Descriptions for jobs (similar to the `desc` method of Rake)
 - Load-average based control of the number of parallel jobs (similar to the `-l` option of Make)
 - Machine-readable output of the dependency graph (similar to the `-P` option of Rake)
 
