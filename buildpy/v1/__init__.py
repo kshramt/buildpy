@@ -70,6 +70,8 @@ class DSL:
             _print_descriptions(self._job_of_target)
         elif args.dependencies:
             _print_dependencies(self._job_of_target)
+        elif args.dependencies_dot:
+            _print_dependencies_dot(self._job_of_target)
         else:
             dependent_jobs = dict()
             leaf_jobs = []
@@ -420,6 +422,12 @@ def _parse_argv(argv):
         help="Print dependencies, then exit.",
     )
     parser.add_argument(
+        "-Q", "--dependencies-dot",
+        action="store_true",
+        default=False,
+        help="Print dependencies in DOT format, then exit. python build.py -Q | dot -Tpdf -Grankdir=LR -Nshape=plaintext -Ecolor='#00000088' >| workflow.pdf",
+    )
+    parser.add_argument(
         "-n", "--dry-run",
         action="store_true",
         default=False,
@@ -445,6 +453,35 @@ def _print_dependencies(job_of_target):
     for j in sorted(set(job_of_target.values()), key=lambda j: j.ts):
         j.write()
         print()
+
+
+def _print_dependencies_dot(job_of_target):
+    node_of_name = dict()
+    i = 0
+    print("digraph G{")
+    for j in sorted(set(job_of_target.values()), key=lambda j: j.ts):
+        i += 1
+        action_node = "n" + str(i)
+        print(action_node + "[label=\"○\"]")
+        for name in j.ts:
+            if name in node_of_name:
+                node = node_of_name[name]
+            else:
+                i += 1
+                node = "n" + str(i)
+                node_of_name[name] = node
+            print(node + "[label=\"" + name + "\"]")
+            print(node + " -> " + action_node)
+        for name in j.ds:
+            if name in node_of_name:
+                node = node_of_name[name]
+            else:
+                i += 1
+                node = "n" + str(i)
+                node_of_name[name] = node
+            print(node + "[label=\"" + name + "\"]")
+            print(action_node + " -> " + node)
+    print("}")
 
 
 def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, load_average, dry_run):
