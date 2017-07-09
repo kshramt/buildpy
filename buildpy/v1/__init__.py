@@ -464,24 +464,24 @@ def _print_dependencies_dot(job_of_target):
         action_node = "n" + str(i)
         print(action_node + "[label=\"○\"]")
         for name in j.ts:
-            if name in node_of_name:
-                node = node_of_name[name]
-            else:
-                i += 1
-                node = "n" + str(i)
-                node_of_name[name] = node
+            node, i = _node_of(name, node_of_name, i)
             print(node + "[label=\"" + name + "\"]")
             print(node + " -> " + action_node)
         for name in j.ds:
-            if name in node_of_name:
-                node = node_of_name[name]
-            else:
-                i += 1
-                node = "n" + str(i)
-                node_of_name[name] = node
+            node, i = _node_of(name, node_of_name, i)
             print(node + "[label=\"" + name + "\"]")
             print(action_node + " -> " + node)
     print("}")
+
+
+def _node_of(name, node_of_name, i):
+    if name in node_of_name:
+        node = node_of_name[name]
+    else:
+        i += 1
+        node = "n" + str(i)
+        node_of_name[name] = node
+    return node, i
 
 
 def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, load_average, dry_run):
