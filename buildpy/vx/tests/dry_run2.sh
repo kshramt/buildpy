@@ -30,7 +30,7 @@ cat <<EOF > build.py
 import os
 import sys
 
-import buildpy
+import buildpy.v1
 
 
 os.environ["SHELL"] = "/bin/bash"

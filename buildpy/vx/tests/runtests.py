@@ -2,12 +2,12 @@
 
 import sys
 
-import buildpy.v1 as buildpyvx
+import buildpy.v1
 
 
 def main(argv):
     def let():
-        s = buildpyvx._TSet()
+        s = buildpy.v1._TSet()
         s.add(s.add(s.add(1)))
         assert len(s) == 2
         s.remove(s.remove(1))

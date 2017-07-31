@@ -31,7 +31,7 @@ import os
 import sys
 import time
 
-import buildpy
+import buildpy.v1
 
 
 os.environ["SHELL"] = "/bin/bash"
