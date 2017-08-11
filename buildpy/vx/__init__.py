@@ -158,12 +158,14 @@ class _FileJob(_Job):
     def need_update(self):
         if self._forced.val():
             return True
-        stat_ds = [os.stat(d) for d in self.unique_ds]
-        if not all(os.path.lexists(t) for t in self.ts):
+        try:
+            stat_ts = [os.stat(t) for t in self.ts]
+        except:
             return True
-        if not stat_ds:
+        if not self.unique_ds:
             return False
-        return max(d.st_mtime for d in stat_ds) > max(os.path.getmtime(t) for t in self.ts)
+        ts_mtime_max = max(t.st_mtime for t in stat_ts)
+        return any(os.path.getmtime(d) > ts_mtime_max for d in self.unique_ds)
 
 
 class _ThreadPool:
