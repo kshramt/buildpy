@@ -38,11 +38,11 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-__dsl = buildpy.v1.DSL()
-file = __dsl.file
-phony = __dsl.phony
-sh = __dsl.sh
-rm = __dsl.rm
+dsl = buildpy.v1.DSL()
+file = dsl.file
+phony = dsl.phony
+sh = dsl.sh
+rm = dsl.rm
 
 
 phony("all", ["check"], desc="Default target")
@@ -52,7 +52,7 @@ phony("t1", [], desc="Test 1")
 
 
 if __name__ == '__main__':
-    __dsl.main(sys.argv)
+    dsl.main(sys.argv)
 EOF
 
 

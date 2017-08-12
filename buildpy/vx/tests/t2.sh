@@ -39,11 +39,11 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-__dsl = buildpy.v1.DSL()
-file = __dsl.file
-phony = __dsl.phony
-sh = __dsl.sh
-rm = __dsl.rm
+dsl = buildpy.v1.DSL()
+file = dsl.file
+phony = dsl.phony
+sh = dsl.sh
+rm = dsl.rm
 
 
 nx = 7
@@ -88,7 +88,7 @@ for x in xs:
 
 if __name__ == '__main__':
     t1 = time.time()
-    __dsl.main(sys.argv)
+    dsl.main(sys.argv)
     t2 = time.time()
     assert t2 - t1 < dt*(1 + nx*(1 + ny*(1 + nz)))/10
 EOF
