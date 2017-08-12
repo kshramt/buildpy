@@ -13,11 +13,11 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-__dsl = buildpy.DSL()
-file = __dsl.file
-phony = __dsl.phony
-sh = __dsl.sh
-rm = __dsl.rm
+dsl = buildpy.DSL()
+file = dsl.file
+phony = dsl.phony
+sh = dsl.sh
+rm = dsl.rm
 
 
 all_files = set(
@@ -88,4 +88,4 @@ def let():
 let()
 
 if __name__ == '__main__':
-    __dsl.main(sys.argv)
+    dsl.main(sys.argv)
