@@ -10,7 +10,7 @@ import threading
 import time
 import warnings
 
-__version__ = "1.3.1"
+__version__ = "1.4.0"
 
 
 CACHE_DIR = os.path.join(os.getcwd(), ".cache", "buildpy")
