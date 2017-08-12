@@ -165,7 +165,7 @@ class _FileJob(_Job):
         if not self.unique_ds:
             return False
         ts_mtime_min = min(t.st_mtime for t in stat_ts)
-        return any(os.path.getmtime(d) >= ts_mtime_min for d in self.unique_ds)
+        return any(os.path.getmtime(d) > ts_mtime_min for d in self.unique_ds):
 
 
 class _ThreadPool:
