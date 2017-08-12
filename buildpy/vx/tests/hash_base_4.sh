@@ -91,12 +91,12 @@ EOF
    sleep 1.1
    touch y
    "$PYTHON" build.py
-   echo == >| /dev/stdout
-   echo == >| /dev/stderr
+   echo ==
+   echo == 1>&2
    # Run-again
    "$PYTHON" build.py
-   echo ooo >| /dev/stdout
-   echo ooo >| /dev/stderr
+   echo ooo
+   echo ooo 1>&2
    # contents have changed, but timestamp is older
    sleep 1.1
    echo more more >> y
