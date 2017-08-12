@@ -110,7 +110,7 @@ class _Job:
         self._n_rest = len(self.unique_ds)
         self.visited = False
         self._lock = threading.Lock()
-        self._forced = _TBool(False)
+        self._dry_run = _TBool(False)
 
     def __repr__(self):
         return "{}({}, {}, descs={})".format(type(self).__name__, repr(self.ts), repr(self.ds), repr(self.descs))
@@ -156,7 +156,7 @@ class _FileJob(_Job):
             DSL.rm(t)
 
     def need_update(self):
-        if self._forced.val():
+        if self._dry_run.val():
             return True
         try:
             stat_ts = [os.stat(t) for t in self.ts]
@@ -254,7 +254,7 @@ class _ThreadPool:
                         # top targets does not have dependent jobs
                         for dj in self._dependent_jobs.get(t, ()):
                             dj.dec_n_rest()
-                            dj._forced.self_or_eq(need_update and self._dry_run)
+                            dj._dry_run.set_self_or_eq(need_update and self._dry_run)
                             if dj.n_rest() == 0:
                                 self.push_job(dj)
         except Exception as e:
