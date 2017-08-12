@@ -13,7 +13,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.DSL()
+dsl = buildpy.DSL(use_hash=True)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
