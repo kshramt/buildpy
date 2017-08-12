@@ -8,6 +8,7 @@ It has following features:
 - Parallel processing (similar to the `-j` option of Make)
 - Correct handling of generation of multiple output files from a single command invocation
 - Dry-run (similar to the `-n` option of Make)
+- Option to enable content-based update scheme (similar to SCons)
 - Deferred error (similar to the `-k` option of Make)
 - Descriptions for jobs (similar to the `desc` method of Rake)
 - Load-average based control of the number of parallel jobs (similar to the `-l` option of Make)
@@ -31,6 +32,7 @@ import sys
 import buildpy
 
 dsl = buildpy.DSL()
+# dsl = buildpy.DSL(use_hash=True) # use content-based update scheme
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh

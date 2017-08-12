@@ -1,5 +1,6 @@
 import _thread
 import argparse
+import hashlib
 import math
 import os
 import queue
@@ -10,6 +11,10 @@ import time
 import warnings
 
 __version__ = "1.3.1"
+
+
+CACHE_DIR = os.path.join(os.getcwd(), ".cache", "buildpy")
+BUF_SIZE = 65536
 
 
 class DSL:
@@ -36,18 +41,21 @@ class DSL:
         except:
             pass
 
-    def __init__(self):
+    def __init__(self, use_hash=False):
         self._job_of_target = dict()
         self._f_of_phony = dict()
         self._deps_of_phony = dict()
         self._descs_of_phony = dict()
+        self._use_hash = use_hash
 
-    def file(self, targets, deps, desc=None):
+    def file(self, targets, deps, desc=None, use_hash=None):
+        if use_hash is None:
+            use_hash = self._use_hash
         targets = _listize(targets)
         deps = _listize(deps)
 
         def _(f):
-            j = _FileJob(f, targets, deps, [desc])
+            j = _FileJob(f, targets, deps, [desc], use_hash)
             for t in targets:
                 _set_unique(self._job_of_target, t, j)
             return _do_nothing
@@ -115,6 +123,12 @@ class _Job:
     def __repr__(self):
         return "{}({}, {}, descs={})".format(type(self).__name__, repr(self.ts), repr(self.ds), repr(self.descs))
 
+    def execute(self):
+        self.f(self)
+
+    def post_execute(self):
+        pass
+
     def rm_targets(self):
         pass
 
@@ -148,8 +162,16 @@ class _PhonyJob(_Job):
 
 
 class _FileJob(_Job):
-    def __init__(self, f, ts, ds, descs):
+    def __init__(self, f, ts, ds, descs, use_hash):
         super().__init__(f, ts, ds, descs)
+        self._use_hash = use_hash
+        self._hash_orig = None
+        self._hash_curr = None
+        self._cache_path = None
+
+    def post_execute(self):
+        if self._use_hash and (self._hash_curr != self._hash_orig):
+            _write_bytes(self._cache_path, self._hash_curr)
 
     def rm_targets(self):
         for t in self.ts:
@@ -160,12 +182,37 @@ class _FileJob(_Job):
             return True
         try:
             stat_ts = [os.stat(t) for t in self.ts]
+            lack_targets = False
         except:
+            lack_targets = True
+        if lack_targets:
+            if self._use_hash:
+                self._make_hashes()
             return True
-        if not self.unique_ds:
-            return False
-        ts_mtime_min = min(t.st_mtime for t in stat_ts)
-        return any(os.path.getmtime(d) > ts_mtime_min for d in self.unique_ds):
+        else:
+            if any(os.path.getmtime(d) > min(t.st_mtime for t in stat_ts) for d in self.unique_ds):
+                if self._use_hash:
+                    return self._make_hashes()
+                else:
+                    return True
+            else:
+                return False
+
+    def _make_hashes(self):
+        sorted_unique_ds = sorted(self.unique_ds)
+        job_hash = hashlib.sha1(
+            b"\0".join(t.encode("utf-8") for t in sorted(set(self.ts)))
+            + b"\0\0"
+            + b"\0".join(d.encode("utf-8") for d in sorted_unique_ds)
+        ).hexdigest()
+        self._cache_path = _jp(CACHE_DIR, job_hash[:2], job_hash[2:])
+        try:
+            with open(self._cache_path, "rb") as fp:
+                self._hash_orig = fp.read()
+        except:
+            pass
+        self._hash_curr = _hash_of_paths(sorted_unique_ds).digest()
+        return self._hash_curr != self._hash_orig
 
 
 class _ThreadPool:
@@ -237,7 +284,7 @@ class _ThreadPool:
                             j.write()
                             print()
                         else:
-                            j.f(j)
+                            j.execute()
                     except Exception as e:
                         got_error = True
                         warnings.warn(repr(j))
@@ -250,6 +297,8 @@ class _ThreadPool:
                     self._n_running.dec()
                 j.set_n_rest(-1)
                 if not got_error:
+                    if need_update:
+                        j.post_execute()
                     for t in j.ts:
                         # top targets does not have dependent jobs
                         for dj in self._dependent_jobs.get(t, ()):
@@ -258,6 +307,9 @@ class _ThreadPool:
                             if dj.n_rest() == 0:
                                 self.push_job(dj)
         except Exception as e:
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            warnings.warn(str(exc_type) + " " + str(fname) + " " + str(exc_tb.tb_lineno))
             warnings.warn(repr(e))
             if not self._keep_going:
                 self._die(e)
@@ -356,7 +408,7 @@ class _TBool(_T):
     def __init__(self, val):
         super().__init__(val)
 
-    def self_or_eq(self, x):
+    def set_self_or_eq(self, x):
         with self._lock:
             self._val = self._val or x
 
@@ -570,6 +622,41 @@ def _unique(xs):
             ret.append(x)
             seen.add(x)
     return ret
+
+
+def _hash_of_paths(paths, buf_size=BUF_SIZE):
+    buf = bytearray(buf_size)
+    h = hashlib.sha1(b"")
+    for path in paths:
+        h.update(os.path.getsize(path).to_bytes(64, sys.byteorder))
+        with open(path, "rb") as fp:
+            while True:
+                n = fp.readinto(buf)
+                if n <= 0:
+                    break
+                elif n < buf_size:
+                    h.update(buf[:n])
+                else:
+                    h.update(buf)
+    return h
+
+
+def _write_bytes(path, b):
+    os.makedirs(_dirname(path), exist_ok=True)
+    with open(path, "wb") as fp:
+        fp.write(b)
+
+
+def _dirname(path):
+    d = os.path.dirname(path)
+    if d:
+        return d
+    else:
+        return "."
+
+
+def _jp(path, *more):
+    return os.path.sep.join([path, *more])
 
 
 def _do_nothing(*_):
