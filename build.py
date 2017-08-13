@@ -41,7 +41,7 @@ buildpy_py_files = list(py_files.intersection(buildpy_files) - test_files)
 def _():
     phony("all", [], desc="The default target")
 
-    @phony("sdist", [], desc="Make distribution file")
+    @phony("sdist", [], desc="Make a distribution file")
     def _(j):
         sh("""
         git ls-files |
