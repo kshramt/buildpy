@@ -42,6 +42,7 @@ os.environ["PYTHON"] = sys.executable
 dsl = buildpy.v1.DSL()
 file = dsl.file
 phony = dsl.phony
+let = dsl.let
 sh = dsl.sh
 rm = dsl.rm
 
@@ -62,28 +63,28 @@ def _(j):
     time.sleep(dt)
 
 for x in xs:
-    def let(x=x):
+    @let
+    def _(x=x):
         @phony(x, [x + y for y in ys])
         def _(j):
             # print(j)
             time.sleep(dt)
 
         for y in ys:
-            def let(y=y):
+            @let
+            def _(y=y):
                 @phony(x + y, [x + y + z for z in zs])
                 def _(j):
                     # print(j)
                     time.sleep(dt)
 
                 for z in zs:
-                    def let(z=z):
+                    @let
+                    def _(z=z):
                         @phony(x + y + z, [])
                         def _(j):
                             # print(j)
                             time.sleep(dt)
-                    let()
-            let()
-    let()
 
 
 if __name__ == '__main__':

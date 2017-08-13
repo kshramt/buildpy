@@ -41,13 +41,14 @@ os.environ["PYTHON"] = sys.executable
 dsl = buildpy.v1.DSL()
 file = dsl.file
 phony = dsl.phony
+let = dsl.let
 sh = dsl.sh
 rm = dsl.rm
 
 
-def let():
+@let
+def _():
     phony("all", [], desc="Default target")
-let()
 
 
 if __name__ == '__main__':

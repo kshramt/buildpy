@@ -19,6 +19,10 @@ BUF_SIZE = 65536
 
 class DSL:
     @staticmethod
+    def let(f):
+        f()
+
+    @staticmethod
     def sh(s, stdout=None, env=None):
         print(s, file=sys.stderr)
         if env is None:
