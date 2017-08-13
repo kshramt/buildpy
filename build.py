@@ -44,11 +44,8 @@ def _():
     @phony("sdist", [], desc="Make a distribution file")
     def _(j):
         sh("""
-        git ls-files |
-        while read line
-        do
-            echo include "$line"
-        done >| MANIFEST.in
+        git ls-files -z |
+        xargs -0 -n1 echo include >| MANIFEST.in
         {} setup.py sdist
         """.format(os.environ["PYTHON"]))
 
