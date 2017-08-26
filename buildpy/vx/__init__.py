@@ -4,6 +4,7 @@ import hashlib
 import math
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import threading
@@ -46,10 +47,28 @@ class DSL:
         )
 
     @staticmethod
+    def dirname(path):
+        return os.path.dirname(path) or os.path.curdir
+
+    @staticmethod
+    def jp(*paths):
+        return os.path.normpath(os.path.join(*paths))
+
+    @staticmethod
+    def mkdir(path):
+        print("os.makedirs({}, exist_ok=True)".format(repr(path)), file=sys.stderr)
+        return os.makedirs(path, exist_ok=True)
+
+    @staticmethod
+    def mv(src, dst):
+        print("shutil.move({}, {})".format(src, dst), file=sys.stderr)
+        return shutil.move(src, dst)
+
+    @staticmethod
     def rm(path):
         print("os.remove({})".format(repr(path)), file=sys.stderr)
         try:
-            os.remove(path)
+            return os.remove(path)
         except:
             pass
 
