@@ -61,7 +61,7 @@ class DSL:
 
     @staticmethod
     def mv(src, dst):
-        print("shutil.move({}, {})".format(src, dst), file=sys.stderr)
+        print("shutil.move({}, {})".format(repr(src), repr(dst)), file=sys.stderr)
         return shutil.move(src, dst)
 
     @staticmethod
