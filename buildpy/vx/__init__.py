@@ -23,18 +23,26 @@ class DSL:
         f()
 
     @staticmethod
-    def sh(s, stdout=None, env=None):
+    def sh(
+            s,
+            check=True,
+            encoding="utf-8",
+            env=None,
+            executable="/bin/bash",
+            shell=True,
+            universal_newlines=True,
+            **kwargs,
+    ):
         print(s, file=sys.stderr)
-        if env is None:
-            env = os.environ
         return subprocess.run(
             s,
-            shell=True,
-            check=True,
+            check=check,
+            encoding=encoding,
             env=env,
-            executable="/bin/bash",
-            stdout=stdout,
-            universal_newlines=True,
+            executable=executable,
+            shell=shell,
+            universal_newlines=universal_newlines,
+            **kwargs,
         )
 
     @staticmethod
