@@ -11,7 +11,7 @@ import threading
 import time
 import warnings
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 
 
 CACHE_DIR = os.path.join(os.getcwd(), ".cache", "buildpy")
