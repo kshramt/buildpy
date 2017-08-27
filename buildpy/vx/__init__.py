@@ -48,11 +48,11 @@ class DSL:
 
     @staticmethod
     def dirname(path):
-        return os.path.dirname(path) or os.path.curdir
+        return _dirname(path)
 
     @staticmethod
-    def jp(*paths):
-        return os.path.normpath(os.path.join(*paths))
+    def jp(path, *more):
+        return _jp(path, *more)
 
     @staticmethod
     def mkdir(path):
@@ -579,7 +579,7 @@ def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, load_average, dry_ru
         for _ in range(deferred_errors.qsize()):
             j, e = deferred_errors.get()
             warnings.warn(repr(e))
-            warnings.warn(j)
+            warnings.warn(repr(j))
         raise Err("Execution failed.")
 
 
@@ -643,6 +643,7 @@ def _set_unique(d, k, v):
     if k in d:
         raise Err(f"{repr(k)} in {repr(d)}")
     d[k] = v
+    return d
 
 
 def _unique(xs):
@@ -679,15 +680,11 @@ def _write_bytes(path, b):
 
 
 def _dirname(path):
-    d = os.path.dirname(path)
-    if d:
-        return d
-    else:
-        return "."
+    return os.path.dirname(path) or os.path.curdir
 
 
 def _jp(path, *more):
-    return os.path.sep.join([path, *more])
+    return os.path.normpath(os.path.join(path, *more))
 
 
 def _do_nothing(*_):
