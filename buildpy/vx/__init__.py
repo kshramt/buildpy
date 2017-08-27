@@ -247,10 +247,10 @@ class _FileJob(_Job):
 
 
 class _ThreadPool:
-    def __init__(self, dependent_jobs, defered_errors, keep_going, n_max, load_average, dry_run):
+    def __init__(self, dependent_jobs, deferred_errors, keep_going, n_max, load_average, dry_run):
         assert n_max > 0
         self._dependent_jobs = dependent_jobs
-        self._defered_errors = defered_errors
+        self._deferred_errors = deferred_errors
         self._keep_going = keep_going
         self._n_max = n_max
         self._load_average = load_average
@@ -322,7 +322,7 @@ class _ThreadPool:
                         warnings.warn(repr(e))
                         j.rm_targets()
                         if self._keep_going:
-                            self._defered_errors.put((j, e))
+                            self._deferred_errors.put((j, e))
                         else:
                             self._die(e)
                     self._n_running.dec()
@@ -570,14 +570,14 @@ def _node_of(name, node_of_name, i):
 
 
 def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, load_average, dry_run):
-    defered_errors = queue.Queue()
-    tp = _ThreadPool(dependent_jobs, defered_errors, keep_going, n_jobs, load_average, dry_run)
+    deferred_errors = queue.Queue()
+    tp = _ThreadPool(dependent_jobs, deferred_errors, keep_going, n_jobs, load_average, dry_run)
     tp.push_jobs(jobs)
     tp.wait()
-    if defered_errors.qsize() > 0:
+    if deferred_errors.qsize() > 0:
         warnings.warn("Following errors have thrown during the execution")
-        for _ in range(defered_errors.qsize()):
-            j, e = defered_errors.get()
+        for _ in range(deferred_errors.qsize()):
+            j, e = deferred_errors.get()
             warnings.warn(repr(e))
             warnings.warn(j)
         raise Err("Execution failed.")
