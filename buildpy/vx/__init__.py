@@ -15,7 +15,7 @@ __version__ = "1.6.0"
 
 
 CACHE_DIR = os.path.join(os.getcwd(), ".cache", "buildpy")
-BUF_SIZE = 65536
+BUF_SIZE = 65535
 
 
 class DSL:
