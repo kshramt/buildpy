@@ -32,7 +32,7 @@ class DSL:
         executable="/bin/bash",
         shell=True,
         universal_newlines=True,
-        **kwargs
+        **kwargs,
     ):
         print(s, file=sys.stderr)
         return subprocess.run(
@@ -56,17 +56,17 @@ class DSL:
 
     @staticmethod
     def mkdir(path):
-        print("os.makedirs({}, exist_ok=True)".format(repr(path)), file=sys.stderr)
+        print(f"os.makedirs({repr(path)}, exist_ok=True)", file=sys.stderr)
         return os.makedirs(path, exist_ok=True)
 
     @staticmethod
     def mv(src, dst):
-        print("shutil.move({}, {})".format(repr(src), repr(dst)), file=sys.stderr)
+        print(f"shutil.move({repr(src)}, {repr(dst)})", file=sys.stderr)
         return shutil.move(src, dst)
 
     @staticmethod
     def rm(path):
-        print("os.remove({})".format(repr(path)), file=sys.stderr)
+        print(f"os.remove({repr(path)})", file=sys.stderr)
         try:
             return os.remove(path)
         except:
@@ -152,7 +152,7 @@ class _Job:
         self._dry_run = _TBool(False)
 
     def __repr__(self):
-        return "{}({}, {}, descs={})".format(type(self).__name__, repr(self.ts), repr(self.ds), repr(self.descs))
+        return f"{type(self).__name__}({repr(self.ts)}, {repr(self.ds)}, descs={repr(self.descs)})"
 
     def execute(self):
         self.f(self)
@@ -188,7 +188,7 @@ class _Job:
 class _PhonyJob(_Job):
     def __init__(self, f, ts, ds, descs):
         if len(ts) != 1:
-            raise Err("PhonyJob with multiple targets is not supported: {}, {}, {}".format(f, ts, ds))
+            raise Err(f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}")
         super().__init__(f, ts, ds, descs)
 
 
@@ -474,7 +474,7 @@ def _parse_argv(argv):
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s {}".format(__version__),
+        version=f"%(prog)s {__version__}",
     )
     parser.add_argument(
         "-j", "--jobs",
@@ -603,15 +603,15 @@ def _make_graph(
         call_chain,
 ):
     if target in call_chain:
-        raise Err("A circular dependency detected: {} for {}".format(target, repr(call_chain)))
+        raise Err(f"A circular dependency detected: {target} for {repr(call_chain)}")
     if target not in job_of_target:
         assert target not in phonies
         if os.path.lexists(target):
             @file([target], [])
             def _(j):
-                raise Err("Must not happen: job for leaf node {} called".format(target))
+                raise Err(f"Must not happen: job for leaf node {target} called")
         else:
-            raise Err("No rule to make {}".format(target))
+            raise Err(f"No rule to make {target}")
     j = job_of_target[target]
     if j.visited:
         return
@@ -636,12 +636,12 @@ def _listize(x):
         return x
     if isinstance(x, str):
         return [x]
-    raise NotImplementedError("_listize({}: {})".format(repr(x), type(x)))
+    raise NotImplementedError(f"_listize({repr(x)}: {type(x)})")
 
 
 def _set_unique(d, k, v):
     if k in d:
-        raise Err("{} in {}".format(repr(k), repr(d)))
+        raise Err(f"{repr(k)} in {repr(d)}")
     d[k] = v
 
 

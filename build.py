@@ -12,6 +12,8 @@ os.environ["SHELL"] = "/bin/bash"
 os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
+python = os.environ["PYTHON"]
+
 
 dsl = buildpy.DSL(use_hash=True)
 file = dsl.file
@@ -43,11 +45,11 @@ def _():
 
     @phony("sdist", [], desc="Make a distribution file")
     def _(j):
-        sh("""
+        sh(f"""
         git ls-files -z |
         xargs -0 -n1 echo include >| MANIFEST.in
-        {} setup.py sdist
-        """.format(os.environ["PYTHON"]))
+        {python} setup.py sdist
+        """)
 
     phony("check", [], desc="Run tests")
     for v in vs:
@@ -63,12 +65,12 @@ def _():
                         test_sh_done = test_sh + ".done"
                         phony("check", [test_sh_done])
 
-                        @file([test_sh_done], [test_sh] + buildpy_py_files, desc="Test {}".format(test_sh))
+                        @file([test_sh_done], [test_sh] + buildpy_py_files, desc=f"Test {test_sh}")
                         def _(j):
-                            sh("""
-                            {}
-                            touch {}
-                            """.format(j.ds[0], j.ts[0]))
+                            sh(f"""
+                            {j.ds[0]}
+                            touch {j.ts[0]}
+                            """)
 
             @let
             def _():
@@ -78,12 +80,13 @@ def _():
                         test_py_done = test_py + ".done"
                         phony("check", [test_py_done])
 
-                        @file([test_py_done], [test_py] + buildpy_py_files, desc="Test {}".format(test_py))
+                        @file([test_py_done], [test_py] + buildpy_py_files, desc=f"Test {test_py}")
                         def _(j):
-                            sh("""
-                            {} {}
-                            touch {}
-                            """.format(os.environ["PYTHON"], j.ds[0], j.ts[0]))
+                            sh(f"""
+                            {python} {j.ds[0]}
+                            touch {j.ts[0]}
+                            """)
+
 
 if __name__ == '__main__':
     dsl.main(sys.argv)

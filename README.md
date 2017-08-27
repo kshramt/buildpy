@@ -14,7 +14,7 @@ It has following features:
 - Load-average based control of the number of parallel jobs (similar to the `-l` option of Make)
 - Machine-readable output of the dependency graph (similar to the `-P` option of Rake)
 
-BuildPy is available from [PyPI](https://pypi.python.org/pypi/buildpy):
+BuildPy supports Python version ≥ 3.6 and is available from [PyPI](https://pypi.python.org/pypi/buildpy):
 
 ```bash
 pip install --user --upgrade buildpy
