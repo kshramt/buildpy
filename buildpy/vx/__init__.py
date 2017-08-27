@@ -32,7 +32,7 @@ class DSL:
         executable="/bin/bash",
         shell=True,
         universal_newlines=True,
-        **kwargs,
+        **kwargs
     ):
         print(s, file=sys.stderr)
         return subprocess.run(
