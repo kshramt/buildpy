@@ -25,14 +25,14 @@ class DSL:
 
     @staticmethod
     def sh(
-            s,
-            check=True,
-            encoding="utf-8",
-            env=None,
-            executable="/bin/bash",
-            shell=True,
-            universal_newlines=True,
-            **kwargs,
+        s,
+        check=True,
+        encoding="utf-8",
+        env=None,
+        executable="/bin/bash",
+        shell=True,
+        universal_newlines=True,
+        **kwargs,
     ):
         print(s, file=sys.stderr)
         return subprocess.run(
