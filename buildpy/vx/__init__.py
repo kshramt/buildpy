@@ -1,6 +1,7 @@
 import _thread
 import argparse
 import hashlib
+import itertools
 import math
 import os
 import queue
@@ -19,6 +20,14 @@ BUF_SIZE = 65535
 
 
 class DSL:
+
+    @staticmethod
+    def loop(*lists):
+        def deco(f):
+            for xs in itertools.product(*lists):
+                f(*xs)
+        return deco
+
     @staticmethod
     def let(f):
         f()
