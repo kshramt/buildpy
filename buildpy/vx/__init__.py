@@ -22,11 +22,8 @@ BUF_SIZE = 65535
 class DSL:
 
     @staticmethod
-    def loop(*lists):
-        def deco(f):
-            for xs in itertools.product(*lists):
-                f(*xs)
-        return deco
+    def loop(*args, **kwargs):
+        return _loop(*args, **kwargs)
 
     @staticmethod
     def let(f):
@@ -710,6 +707,23 @@ def _jp(path, *more):
     'a'
     """
     return os.path.normpath(os.path.join(path, *more))
+
+
+def _loop(*lists, trans=itertools.product):
+    """
+    >>> _loop([1, 2], ["a", "b"])(lambda x, y: print(x, y))
+    1 a
+    1 b
+    2 a
+    2 b
+    >>> _loop([(1, "a"), (2, "b")], trans=lambda x: x)(lambda x, y: print(x, y))
+    1 a
+    2 b
+    """
+    def deco(f):
+        for xs in trans(*lists):
+            f(*xs)
+    return deco
 
 
 def _do_nothing(*_):
