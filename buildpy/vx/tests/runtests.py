@@ -1,11 +1,14 @@
 #!/usr/bin/python
 
+import doctest
 import sys
 
 import buildpy.v1
 
 
 def main(argv):
+    doctest.testmod(buildpy.v1, raise_on_error=True)
+
     @buildpy.v1.DSL.let
     def _():
         s = buildpy.v1._TSet()

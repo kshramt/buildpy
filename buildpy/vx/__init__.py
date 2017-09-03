@@ -689,10 +689,26 @@ def _write_bytes(path, b):
 
 
 def _dirname(path):
+    """
+    >>> _dirname("")
+    '.'
+    >>> _dirname("a")
+    '.'
+    >>> _dirname("a/b")
+    'a'
+    """
     return os.path.dirname(path) or os.path.curdir
 
 
 def _jp(path, *more):
+    """
+    >>> _jp(".", "a")
+    'a'
+    >>> _jp("a", "b")
+    'a/b'
+    >>> _jp("a", "b", "..")
+    'a'
+    """
     return os.path.normpath(os.path.join(path, *more))
 
 
