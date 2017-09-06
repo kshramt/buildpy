@@ -30,6 +30,7 @@ setup(
     packages=[
         "buildpy",
         "buildpy.v1",
+        "buildpy.v2",
         "buildpy.vx",
     ],
     zip_safe=True,
