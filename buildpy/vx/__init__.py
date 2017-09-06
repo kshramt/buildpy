@@ -709,19 +709,19 @@ def _jp(path, *more):
     return os.path.normpath(os.path.join(path, *more))
 
 
-def _loop(*lists, trans=itertools.product):
+def _loop(*lists, tform=itertools.product):
     """
     >>> _loop([1, 2], ["a", "b"])(lambda x, y: print(x, y))
     1 a
     1 b
     2 a
     2 b
-    >>> _loop([(1, "a"), (2, "b")], trans=lambda x: x)(lambda x, y: print(x, y))
+    >>> _loop([(1, "a"), (2, "b")], tform=lambda x: x)(lambda x, y: print(x, y))
     1 a
     2 b
     """
     def deco(f):
-        for xs in trans(*lists):
+        for xs in tform(*lists):
             f(*xs)
     return deco
 
