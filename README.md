@@ -110,3 +110,20 @@ To execute the declared jobs, please add the following line to your `build.py`:
 ```py
 dsl.main(sys.argv)
 ```
+
+## Development
+
+### Release of a new version
+
+Add `"buildpy.v<N>"` to `setup.py`.
+
+```bash
+cd buildpy
+mv v<N> v<N+1>
+cp vx v<N>
+cd v<N>
+grep -l buildpy.vx -R . | xargs -n1 sed -i'' -e 's/buildpy.vx/buildpy.v<N>/g'
+find . -type f | grep -v done | xargs git add
+cd ../..
+python build.py sdist
+```
