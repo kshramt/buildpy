@@ -115,14 +115,14 @@ dsl.main(sys.argv)
 
 ### Release of a new version
 
-Add `"buildpy.v<N>"` to `setup.py`.
+Add `"buildpy.v9"` to `setup.py`.
 
 ```bash
 cd buildpy
-mv v<N> v<N+1>
-cp vx v<N>
-cd v<N>
-grep -l buildpy.vx -R . | xargs -n1 sed -i'' -e 's/buildpy.vx/buildpy.v<N>/g'
+mv v9 v10
+cp vx v9
+cd v9
+grep -l buildpy.vx -R . | xargs -n1 sed -i'' -e 's/buildpy.vx/buildpy.v9/g'
 find . -type f | grep -v done | xargs git add
 cd ../..
 python build.py sdist
