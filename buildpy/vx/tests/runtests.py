@@ -3,16 +3,16 @@
 import doctest
 import sys
 
-import buildpy.v1
+import buildpy.vx
 
 
 def main(argv):
-    doctest.testmod(buildpy.v1, raise_on_error=True)
-    # doctest.testmod(buildpy.v1)
+    doctest.testmod(buildpy.vx, raise_on_error=True)
+    # doctest.testmod(buildpy.vx)
 
-    @buildpy.v1.DSL.let
+    @buildpy.vx.DSL.let
     def _():
-        s = buildpy.v1._TSet()
+        s = buildpy.vx._TSet()
         s.add(s.add(s.add(1)))
         assert len(s) == 2
         s.remove(s.remove(1))
