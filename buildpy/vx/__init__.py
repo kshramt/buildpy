@@ -2,21 +2,26 @@ import _thread
 import argparse
 import hashlib
 import itertools
+import logging
 import math
 import os
 import queue
 import shutil
+import struct
 import subprocess
 import sys
 import threading
 import time
-import warnings
 
 __version__ = "2.0.0"
 
 
 CACHE_DIR = os.path.join(os.getcwd(), ".cache", "buildpy")
 BUF_SIZE = 65535
+
+
+logging.basicConfig(format="%(levelname)s\t%(asctime)s\t%(filename)s\t%(funcName)s\t%(lineno)d\t%(message)s", level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class DSL:
@@ -63,7 +68,7 @@ class DSL:
     @staticmethod
     def mkdir(path):
         print(f"os.makedirs({repr(path)}, exist_ok=True)", file=sys.stderr)
-        return os.makedirs(path, exist_ok=True)
+        return _mkdir(path)
 
     @staticmethod
     def mv(src, dst):
@@ -84,6 +89,7 @@ class DSL:
         self._deps_of_phony = dict()
         self._descs_of_phony = dict()
         self._use_hash = use_hash
+        self._t_of_d_cache = _Cache()
 
     def file(self, targets, deps, desc=None, use_hash=None):
         if use_hash is None:
@@ -92,7 +98,7 @@ class DSL:
         deps = _listize(deps)
 
         def _(f):
-            j = _FileJob(f, targets, deps, [desc], use_hash)
+            j = _FileJob(f, targets, deps, [desc], use_hash, self._t_of_d_cache)
             for t in targets:
                 _set_unique(self._job_of_target, t, j)
             return _do_nothing
@@ -163,9 +169,6 @@ class _Job:
     def execute(self):
         self.f(self)
 
-    def post_execute(self):
-        pass
-
     def rm_targets(self):
         pass
 
@@ -199,57 +202,50 @@ class _PhonyJob(_Job):
 
 
 class _FileJob(_Job):
-    def __init__(self, f, ts, ds, descs, use_hash):
+    def __init__(self, f, ts, ds, descs, use_hash, t_of_d_cache):
         super().__init__(f, ts, ds, descs)
-        self._use_hash = use_hash
+        self._t_of_d = _hash_time_of if use_hash else _time_of
+        self._t_of_d_cache = t_of_d_cache
         self._hash_orig = None
         self._hash_curr = None
         self._cache_path = None
-
-    def post_execute(self):
-        if self._use_hash and (self._hash_curr != self._hash_orig):
-            _write_bytes(self._cache_path, self._hash_curr)
 
     def rm_targets(self):
         for t in self.ts:
             DSL.rm(t)
 
     def need_update(self):
+        logger.debug(self._dry_run.val())
+        logger.debug(self.ts)
         if self._dry_run.val():
             return True
         try:
-            stat_ts = [os.stat(t) for t in self.ts]
-            lack_targets = False
+            t_ts = min(os.path.getmtime(t) for t in self.ts)
         except:
-            lack_targets = True
-        if lack_targets:
-            if self._use_hash:
-                self._make_hashes()
+            # Intentionally create hash caches.
+            for d in self.unique_ds:
+                self._t_of_d_from_cache(d)
             return True
-        else:
-            if any(os.path.getmtime(d) > min(t.st_mtime for t in stat_ts) for d in self.unique_ds):
-                if self._use_hash:
-                    return self._make_hashes()
-                else:
-                    return True
-            else:
-                return False
+        logger.debug(t_ts)
+        # Intentionally create hash caches.
+        # Do not use `any`.
+        return max((self._t_of_d_from_cache(d) for d in self.unique_ds), default=-float('inf')) > t_ts
+        # Use of `>` instead of `>=` is intentional.
+        # In theory, t_deps < t_targets if targets were made from deps, and thus you might expect ≮ (>=).
+        # However, t_deps > t_targets should hold if the deps have modified *after* the creation of the targets.
+        # As it is common that an accidental modification of deps is made by slow human hands
+        # whereas targets are created by a fast computer program, I expect that use of > here to be better.
 
-    def _make_hashes(self):
-        sorted_unique_ds = sorted(self.unique_ds)
-        job_hash = hashlib.sha1(
-            b"\0".join(t.encode("utf-8") for t in sorted(set(self.ts)))
-            + b"\0\0"
-            + b"\0".join(d.encode("utf-8") for d in sorted_unique_ds)
-        ).hexdigest()
-        self._cache_path = _jp(CACHE_DIR, job_hash[:2], job_hash[2:])
-        try:
-            with open(self._cache_path, "rb") as fp:
-                self._hash_orig = fp.read()
-        except:
-            pass
-        self._hash_curr = _hash_of_paths(sorted_unique_ds).digest()
-        return self._hash_curr != self._hash_orig
+    def _t_of_d_from_cache(self, d):
+        """
+        Return: last hash time.
+        """
+        with self._t_of_d_cache.lock():
+            try:
+                return self._t_of_d_cache[d].val()
+            except:
+                self._t_of_d_cache[d] = _TVal(self._t_of_d(d, CACHE_DIR))
+                return self._t_of_d_cache[d].val()
 
 
 class _ThreadPool:
@@ -307,6 +303,7 @@ class _ThreadPool:
                 assert j.n_rest() == 0
                 got_error = False
                 need_update = j.need_update()
+                logger.debug(need_update)
                 if need_update:
                     assert self._n_running.val() >= 0
                     if math.isfinite(self._load_average):
@@ -324,8 +321,8 @@ class _ThreadPool:
                             j.execute()
                     except Exception as e:
                         got_error = True
-                        warnings.warn(repr(j))
-                        warnings.warn(repr(e))
+                        logging.error(repr(j))
+                        logging.error(repr(e))
                         j.rm_targets()
                         if self._keep_going:
                             self._deferred_errors.put((j, e))
@@ -334,8 +331,6 @@ class _ThreadPool:
                     self._n_running.dec()
                 j.set_n_rest(-1)
                 if not got_error:
-                    if need_update:
-                        j.post_execute()
                     for t in j.ts:
                         # top targets does not have dependent jobs
                         for dj in self._dependent_jobs.get(t, ()):
@@ -346,8 +341,8 @@ class _ThreadPool:
         except Exception as e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            warnings.warn(str(exc_type) + " " + str(fname) + " " + str(exc_tb.tb_lineno))
-            warnings.warn(repr(e))
+            logging.error(str(exc_type) + " " + str(fname) + " " + str(exc_tb.tb_lineno))
+            logging.error(repr(e))
             if not self._keep_going:
                 self._die(e)
         finally:
@@ -369,11 +364,11 @@ class _ThreadPool:
         sys.exit(e)
 
 
-class _T:
+class _TVal:
     __slots__ = ("_lock", "_val")
 
-    def __init__(self, val):
-        self._lock = threading.Lock()
+    def __init__(self, val, lock=threading.Lock):
+        self._lock = lock()
         self._val = val
 
     def val(self):
@@ -381,7 +376,32 @@ class _T:
             return self._val
 
 
-class _TSet(_T):
+class _Cache(_TVal):
+
+    def __init__(self, ):
+        super().__init__(dict(), threading.RLock)
+
+    def __len__(self):
+        with self._lock:
+            return len(self._val)
+
+    def __setitem__(self, k, v):
+        with self._lock:
+            self._val[k] = v
+
+    def __getitem__(self, k):
+        with self._lock:
+            return self._val[k]
+
+    def __contains__(self, k):
+        with self._lock:
+            return k in self._val
+
+    def lock(self):
+        return self._lock
+
+
+class _TSet(_TVal):
     def __init__(self):
         super().__init__(set())
 
@@ -402,7 +422,7 @@ class _TSet(_T):
             return self._val.pop()
 
 
-class _TStack(_T):
+class _TStack(_TVal):
     class Empty(Exception):
         def __init__(self):
             pass
@@ -428,7 +448,7 @@ class _TStack(_T):
             raise self.Empty()
 
 
-class _TInt(_T):
+class _TInt(_TVal):
     def __init__(self, val):
         super().__init__(val)
 
@@ -441,7 +461,7 @@ class _TInt(_T):
             self._val -= 1
 
 
-class _TBool(_T):
+class _TBool(_TVal):
     def __init__(self, val):
         super().__init__(val)
 
@@ -581,11 +601,11 @@ def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, load_average, dry_ru
     tp.push_jobs(jobs)
     tp.wait()
     if deferred_errors.qsize() > 0:
-        warnings.warn("Following errors have thrown during the execution")
+        logging.error("Following errors have thrown during the execution")
         for _ in range(deferred_errors.qsize()):
             j, e = deferred_errors.get()
-            warnings.warn(repr(e))
-            warnings.warn(repr(j))
+            logging.error(repr(e))
+            logging.error(repr(j))
         raise Err("Execution failed.")
 
 
@@ -662,27 +682,81 @@ def _unique(xs):
     return ret
 
 
-def _hash_of_paths(paths, buf_size=BUF_SIZE):
+def _time_of(path, cache_dir):
+    return os.path.getmtime(path)
+
+
+def _hash_time_of(path, cache_dir):
+    """
+    path cache_path -> min(path_time, cache_time)
+
+    todo: Use flock.
+    """
+    cache_path = _jp(cache_dir, os.path.abspath(path))
+    t_path = os.path.getmtime(path)
+    try:
+        cache_path_stat = os.stat(cache_path)
+    except:
+        h_path = _hash_of_path(path)
+        _dump_hash_time_cache(cache_path, t_path, h_path)
+        return t_path
+
+    if cache_path_stat.st_size != 28:
+        h_path = _hash_of_path(path)
+        _dump_hash_time_cache(cache_path, t_path, h_path)
+        return t_path
+    else:
+        try:
+            t_cache, h_cache = _load_hash_time_cache(cache_path)
+        except:
+            h_path = _hash_of_path(path)
+            _dump_hash_time_cache(cache_path, t_path, h_path)
+            return t_path
+
+        if cache_path_stat.st_mtime > os.path.getmtime(path):
+            return t_cache
+        else:
+            h_path = _hash_of_path(path)
+            if h_path != h_cache:
+                _dump_hash_time_cache(cache_path, t_path, h_path)
+                return t_path
+            else:
+                t_now = time.time()
+                os.utime(cache_path, (t_now, t_now))
+                return t_cache
+
+
+def _dump_hash_time_cache(cache_path, t_path, h_path):
+    _mkdir(_dirname(cache_path))
+    with open(cache_path, "wb") as fp:
+        fp.write(struct.pack("d", t_path))
+        fp.write(h_path)
+
+
+def _load_hash_time_cache(cache_path):
+    with open(cache_path, "rb") as fp:
+        t = struct.unpack("d", fp.read(8))[0]
+        h = fp.read(20)
+        return t, h
+
+
+def _hash_of_path(path, buf_size=BUF_SIZE):
     buf = bytearray(buf_size)
     h = hashlib.sha1(b"")
-    for path in paths:
-        h.update(os.path.getsize(path).to_bytes(64, sys.byteorder))
-        with open(path, "rb") as fp:
-            while True:
-                n = fp.readinto(buf)
-                if n <= 0:
-                    break
-                elif n < buf_size:
-                    h.update(buf[:n])
-                else:
-                    h.update(buf)
-    return h
+    with open(path, "rb") as fp:
+        while True:
+            n = fp.readinto(buf)
+            if n <= 0:
+                break
+            elif n < buf_size:
+                h.update(buf[:n])
+            else:
+                h.update(buf)
+    return h.digest()
 
 
-def _write_bytes(path, b):
-    os.makedirs(_dirname(path), exist_ok=True)
-    with open(path, "wb") as fp:
-        fp.write(b)
+def _mkdir(path):
+    return os.makedirs(path, exist_ok=True)
 
 
 def _dirname(path):
@@ -705,8 +779,10 @@ def _jp(path, *more):
     'a/b'
     >>> _jp("a", "b", "..")
     'a'
+    >>> _jp("a", "/b", "c")
+    'a/b/c'
     """
-    return os.path.normpath(os.path.join(path, *more))
+    return os.path.normpath(os.path.sep.join((path, os.path.sep.join(more))))
 
 
 def _loop(*lists, tform=itertools.product):

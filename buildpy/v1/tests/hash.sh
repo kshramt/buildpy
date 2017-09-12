@@ -31,12 +31,12 @@ import hashlib
 import os
 import sys
 
-import buildpy.v1
+import buildpy.vx
 
-a = bytearray(buildpy.v1.BUF_SIZE + 1)
+a = bytearray(buildpy.vx.BUF_SIZE + 1)
 b = b'abcdefg'
-buildpy.v1._write_bytes("a", a)
-buildpy.v1._write_bytes("b", b)
+buildpy.vx._write_bytes("a", a)
+buildpy.vx._write_bytes("b", b)
 
 expected = hashlib.sha1(
     len(a).to_bytes(64, sys.byteorder)
@@ -44,7 +44,7 @@ expected = hashlib.sha1(
     + len(b).to_bytes(64, sys.byteorder)
     + b
 ).hexdigest()
-actual = buildpy.v1._hash_of_paths(["a", "b"]).hexdigest()
+actual = buildpy.vx._hash_of_paths(["a", "b"]).hexdigest()
 
 assert actual == expected
 EOF
