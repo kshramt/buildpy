@@ -5,7 +5,7 @@ import re
 import subprocess
 import sys
 
-import buildpy
+import buildpy.vx
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -15,7 +15,7 @@ os.environ["PYTHON"] = sys.executable
 python = os.environ["PYTHON"]
 
 
-dsl = buildpy.DSL(use_hash=True)
+dsl = buildpy.vx.DSL(use_hash=True)
 file = dsl.file
 phony = dsl.phony
 loop = dsl.loop
