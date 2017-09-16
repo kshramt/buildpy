@@ -215,8 +215,6 @@ class _FileJob(_Job):
             DSL.rm(t)
 
     def need_update(self):
-        logger.debug(self._dry_run.val())
-        logger.debug(self.ts)
         if self._dry_run.val():
             return True
         try:
@@ -226,7 +224,6 @@ class _FileJob(_Job):
             for d in self.unique_ds:
                 self._t_of_d_from_cache(d)
             return True
-        logger.debug(t_ts)
         # Intentionally create hash caches.
         # Do not use `any`.
         return max((self._t_of_d_from_cache(d) for d in self.unique_ds), default=-float('inf')) > t_ts
@@ -303,7 +300,6 @@ class _ThreadPool:
                 assert j.n_rest() == 0
                 got_error = False
                 need_update = j.need_update()
-                logger.debug(need_update)
                 if need_update:
                     assert self._n_running.val() >= 0
                     if math.isfinite(self._load_average):
