@@ -488,7 +488,7 @@ class _Cons:
 
 
 def _parse_argv(argv):
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         "targets",
         nargs="*",
@@ -502,19 +502,19 @@ def _parse_argv(argv):
         "--log",
         default="warning",
         choices=["debug", "info", "warning", "error", "critical"],
-        help="Set log level [%(default)s].",
+        help="Set log level.",
     )
     parser.add_argument(
         "-j", "--jobs",
         type=int,
         default=1,
-        help="Number of parallel external jobs [%(default)d].",
+        help="Number of parallel external jobs.",
     )
     parser.add_argument(
         "-l", "--load-average",
         type=float,
         default=float("inf"),
-        help="No new job is started if there are other running jobs and the load average is higher than the specified value [%(default)f].",
+        help="No new job is started if there are other running jobs and the load average is higher than the specified value.",
     )
     parser.add_argument(
         "-k", "--keep-going",
@@ -538,7 +538,7 @@ def _parse_argv(argv):
         "-Q", "--dependencies-dot",
         action="store_true",
         default=False,
-        help="Print dependencies in DOT format, then exit. python build.py -Q | dot -Tpdf -Grankdir=LR -Nshape=plaintext -Ecolor='#00000088' >| workflow.pdf",
+        help=f"Print dependencies in DOT format, then exit. {os.path.basename(sys.executable)} build.py -Q | dot -Tpdf -Grankdir=LR -Nshape=plaintext -Ecolor='#00000088' >| workflow.pdf",
     )
     parser.add_argument(
         "-n", "--dry-run",
