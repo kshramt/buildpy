@@ -1,11 +1,24 @@
 #!/usr/bin/python
 
+import logging
 import os
 import re
 import subprocess
 import sys
 
 import buildpy.vx
+
+
+def setup_logger():
+    logger = logging.getLogger(__name__)
+    hdl = logging.StreamHandler(sys.stderr)
+    hdl.setFormatter(logging.Formatter("%(levelname)s\t%(asctime)s\t%(filename)s\t%(funcName)s\t%(lineno)d\t%(message)s"))
+    logger.addHandler(hdl)
+    logger.setLevel(logging.DEBUG)
+    return logger
+
+
+logger = setup_logger()
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -52,17 +65,20 @@ def _(j):
 
 
 phony("check", [], desc="Run tests")
+
+
 @loop(vs)
 def _(v):
     v_files = [path for path in all_files if path.startswith(os.path.join("buildpy", v))]
     v_test_files = [path for path in v_files if path.startswith(os.path.join("buildpy", v, "tests"))]
+    v_py_files = list(set(v_files).intersection(set(buildpy_py_files)))
 
     @loop(path for path in v_test_files if path.endswith(".sh"))
     def _(test_sh):
         test_sh_done = test_sh + ".done"
         phony("check", [test_sh_done])
 
-        @file([test_sh_done], [test_sh] + buildpy_py_files, desc=f"Test {test_sh}")
+        @file([test_sh_done], [test_sh] + v_py_files, desc=f"Test {test_sh}")
         def _(j):
             sh(f"""
             {j.ds[0]}
@@ -74,7 +90,7 @@ def _(v):
         test_py_done = test_py + ".done"
         phony("check", [test_py_done])
 
-        @file([test_py_done], [test_py] + buildpy_py_files, desc=f"Test {test_py}")
+        @file([test_py_done], [test_py] + v_py_files, desc=f"Test {test_py}")
         def _(j):
             sh(f"""
             {python} {j.ds[0]}
