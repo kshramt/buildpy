@@ -1,5 +1,6 @@
 import _thread
 import argparse
+import fcntl
 import hashlib
 import itertools
 import logging
@@ -689,8 +690,6 @@ def _time_of(path, cache_dir):
 def _hash_time_of(path, cache_dir):
     """
     path cache_path -> min(path_time, cache_time)
-
-    todo: Use flock.
     """
     cache_path = _jp(cache_dir, os.path.abspath(path))
     t_path = os.path.getmtime(path)
@@ -729,12 +728,14 @@ def _hash_time_of(path, cache_dir):
 def _dump_hash_time_cache(cache_path, t_path, h_path):
     _mkdir(_dirname(cache_path))
     with open(cache_path, "wb") as fp:
+        fcntl.flock(fp, fcntl.LOCK_EX)
         fp.write(struct.pack("d", t_path))
         fp.write(h_path)
 
 
 def _load_hash_time_cache(cache_path):
     with open(cache_path, "rb") as fp:
+        fcntl.flock(fp, fcntl.LOCK_EX)
         t = struct.unpack("d", fp.read(8))[0]
         h = fp.read(20)
         return t, h
