@@ -20,8 +20,6 @@ __version__ = "2.0.0"
 CACHE_DIR = os.path.join(os.getcwd(), ".cache", "buildpy")
 BUF_SIZE = 65535
 
-
-logging.basicConfig(format="%(levelname)s\t%(asctime)s\t%(filename)s\t%(funcName)s\t%(lineno)d\t%(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -141,6 +139,7 @@ class DSL:
 
     def main(self, argv):
         args = _parse_argv(argv[1:])
+        _configure_logger(args.log)
         self.finish(args)
 
 
@@ -504,16 +503,22 @@ def _parse_argv(argv):
         version=f"%(prog)s {__version__}",
     )
     parser.add_argument(
+        "--log",
+        default="warning",
+        choices=["debug", "info", "warning", "error", "critical"],
+        help="Set log level [%(default)s].",
+    )
+    parser.add_argument(
         "-j", "--jobs",
         type=int,
         default=1,
-        help="Number of parallel external jobs.",
+        help="Number of parallel external jobs [%(default)d].",
     )
     parser.add_argument(
         "-l", "--load-average",
         type=float,
         default=float("inf"),
-        help="No new job is started if there are other running jobs and the load average is higher than the specified value.",
+        help="No new job is started if there are other running jobs and the load average is higher than the specified value [%(default)f].",
     )
     parser.add_argument(
         "-k", "--keep-going",
@@ -551,6 +556,20 @@ def _parse_argv(argv):
     if not args.targets:
         args.targets.append("all")
     return args
+
+
+def _configure_logger(log):
+    hdl = logging.StreamHandler(sys.stderr)
+    hdl.setFormatter(logging.Formatter("%(levelname)s\t%(asctime)s\t%(filename)s\t%(funcName)s\t%(lineno)d\t%(message)s"))
+    level = dict(
+        debug=logging.DEBUG,
+        info=logging.INFO,
+        warning=logging.WARNING,
+        error=logging.ERROR,
+        critical=logging.CRITICAL,
+    )[log.lower()]
+    logger.addHandler(hdl)
+    logger.setLevel(level)
 
 
 def _print_descriptions(job_of_target):
@@ -742,6 +761,7 @@ def _load_hash_time_cache(cache_path):
 
 
 def _hash_of_path(path, buf_size=BUF_SIZE):
+    logger.debug(path)
     buf = bytearray(buf_size)
     h = hashlib.sha1(b"")
     with open(path, "rb") as fp:
