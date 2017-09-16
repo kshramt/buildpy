@@ -821,7 +821,3 @@ def _loop(*lists, tform=itertools.product):
 
 def _do_nothing(*_):
     pass
-
-
-def _dbg(*xs):
-    print("DBG:\t" + "\t".join(str(x) for x in xs), file=sys.stderr)
