@@ -21,6 +21,9 @@ CACHE_DIR = os.path.join(os.getcwd(), ".cache", "buildpy")
 BUF_SIZE = 65535
 
 logger = logging.getLogger(__name__)
+_hdl = logging.StreamHandler(sys.stderr)
+_hdl.setFormatter(logging.Formatter("%(levelname)s\t%(asctime)s\t%(filename)s\t%(funcName)s\t%(lineno)d\t%(message)s"))
+logger.addHandler(_hdl)
 
 
 class DSL:
@@ -139,7 +142,7 @@ class DSL:
 
     def main(self, argv):
         args = _parse_argv(argv[1:])
-        _configure_logger(args.log)
+        set_log_level(args.log)
         self.finish(args)
 
 
@@ -554,9 +557,7 @@ def _parse_argv(argv):
     return args
 
 
-def _configure_logger(log):
-    hdl = logging.StreamHandler(sys.stderr)
-    hdl.setFormatter(logging.Formatter("%(levelname)s\t%(asctime)s\t%(filename)s\t%(funcName)s\t%(lineno)d\t%(message)s"))
+def set_log_level(log):
     level = dict(
         debug=logging.DEBUG,
         info=logging.INFO,
@@ -564,7 +565,6 @@ def _configure_logger(log):
         error=logging.ERROR,
         critical=logging.CRITICAL,
     )[log.lower()]
-    logger.addHandler(hdl)
     logger.setLevel(level)
 
 
