@@ -22,7 +22,7 @@ BUF_SIZE = 65535
 
 logger = logging.getLogger(__name__)
 _hdl = logging.StreamHandler(sys.stderr)
-_hdl.setFormatter(logging.Formatter("%(levelname)s\t%(asctime)s\t%(filename)s\t%(funcName)s\t%(lineno)d\t%(message)s"))
+_hdl.setFormatter(logging.Formatter("%(levelname)s:\t%(asctime)s\t%(filename)s\t%(funcName)s\t%(lineno)d\t%(message)s", datefmt="%Y-%m-%dT%H:%M:%S"))
 logger.addHandler(_hdl)
 
 
