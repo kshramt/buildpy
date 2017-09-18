@@ -706,6 +706,7 @@ def _hash_time_of(path, cache_dir):
     """
     path cache_path -> min(path_time, cache_time)
     """
+    logger.debug(str(threading.get_ident()) + "\t" + path)
     cache_path = _jp(cache_dir, os.path.abspath(path))
     t_path = os.path.getmtime(path)
     try:
@@ -741,6 +742,7 @@ def _hash_time_of(path, cache_dir):
 
 
 def _dump_hash_time_cache(cache_path, t_path, h_path):
+    logger.debug(str(threading.get_ident()) + "\t" + cache_path)
     _mkdir(_dirname(cache_path))
     with open(cache_path, "wb") as fp:
         fcntl.flock(fp, fcntl.LOCK_EX)
