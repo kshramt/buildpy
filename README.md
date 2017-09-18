@@ -29,9 +29,9 @@ python build.py all --jobs="$(nproc)" --keep-going
 ```py
 import sys
 
-import buildpy
+import buildpy.vx
 
-dsl = buildpy.DSL()
+dsl = buildpy.vx.DSL()
 # dsl = buildpy.DSL(use_hash=True) # use content-based update scheme
 file = dsl.file
 phony = dsl.phony
