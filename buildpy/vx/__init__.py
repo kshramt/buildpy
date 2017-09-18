@@ -14,7 +14,7 @@ import sys
 import threading
 import time
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 
 CACHE_DIR = os.path.join(os.getcwd(), ".cache", "buildpy")
