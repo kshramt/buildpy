@@ -91,7 +91,7 @@ class DSL:
         self._deps_of_phony = dict()
         self._descs_of_phony = dict()
         self._use_hash = use_hash
-        self._t_of_d_cache = _Cache()
+        self._time_of_dep_cache = _Cache()
 
     def file(self, targets, deps, desc=None, use_hash=None):
         if use_hash is None:
@@ -100,7 +100,7 @@ class DSL:
         deps = _listize(deps)
 
         def _(f):
-            j = _FileJob(f, targets, deps, [desc], use_hash, self._t_of_d_cache)
+            j = _FileJob(f, targets, deps, [desc], use_hash, self._time_of_dep_cache)
             for t in targets:
                 _set_unique(self._job_of_target, t, j)
             return _do_nothing
@@ -205,10 +205,10 @@ class _PhonyJob(_Job):
 
 
 class _FileJob(_Job):
-    def __init__(self, f, ts, ds, descs, use_hash, t_of_d_cache):
+    def __init__(self, f, ts, ds, descs, use_hash, time_of_dep_cache):
         super().__init__(f, ts, ds, descs)
-        self._t_of_d = _hash_time_of if use_hash else _time_of
-        self._t_of_d_cache = t_of_d_cache
+        self._time_of_dep = _hash_time_of if use_hash else _time_of
+        self._time_of_dep_cache = time_of_dep_cache
         self._hash_orig = None
         self._hash_curr = None
         self._cache_path = None
@@ -225,27 +225,27 @@ class _FileJob(_Job):
         except:
             # Intentionally create hash caches.
             for d in self.unique_ds:
-                self._t_of_d_from_cache(d)
+                self._time_of_dep_from_cache(d)
             return True
         # Intentionally create hash caches.
         # Do not use `any`.
-        return max((self._t_of_d_from_cache(d) for d in self.unique_ds), default=-float('inf')) > t_ts
+        return max((self._time_of_dep_from_cache(d) for d in self.unique_ds), default=-float('inf')) > t_ts
         # Use of `>` instead of `>=` is intentional.
         # In theory, t_deps < t_targets if targets were made from deps, and thus you might expect ≮ (>=).
         # However, t_deps > t_targets should hold if the deps have modified *after* the creation of the targets.
         # As it is common that an accidental modification of deps is made by slow human hands
         # whereas targets are created by a fast computer program, I expect that use of > here to be better.
 
-    def _t_of_d_from_cache(self, d):
+    def _time_of_dep_from_cache(self, d):
         """
         Return: last hash time.
         """
-        with self._t_of_d_cache.lock():
+        with self._time_of_dep_cache.lock():
             try:
-                return self._t_of_d_cache[d].val()
+                return self._time_of_dep_cache[d].val()
             except:
-                self._t_of_d_cache[d] = _TVal(self._t_of_d(d, CACHE_DIR))
-                return self._t_of_d_cache[d].val()
+                self._time_of_dep_cache[d] = _TVal(self._time_of_dep(d, CACHE_DIR))
+                return self._time_of_dep_cache[d].val()
 
 
 class _ThreadPool:
