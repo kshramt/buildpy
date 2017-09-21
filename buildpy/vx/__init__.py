@@ -238,14 +238,9 @@ class _FileJob(_Job):
 
     def _time_of_dep_from_cache(self, d):
         """
-        Return: last hash time.
+        Return: the last hash time.
         """
-        with self._time_of_dep_cache.lock():
-            try:
-                return self._time_of_dep_cache[d].val()
-            except:
-                self._time_of_dep_cache[d] = _TVal(self._time_of_dep(d, CACHE_DIR))
-                return self._time_of_dep_cache[d].val()
+        return self._time_of_dep_cache.get(d, lambda : self._time_of_dep(d, CACHE_DIR))
 
 
 class _ThreadPool:
@@ -375,14 +370,10 @@ class _TVal:
             return self._val
 
 
-class _Cache(_TVal):
+class _TDict(_TVal):
 
-    def __init__(self, ):
-        super().__init__(dict(), threading.RLock)
-
-    def __len__(self):
-        with self._lock:
-            return len(self._val)
+    def __init__(self):
+        super().__init__(dict())
 
     def __setitem__(self, k, v):
         with self._lock:
@@ -392,12 +383,30 @@ class _Cache(_TVal):
         with self._lock:
             return self._val[k]
 
-    def __contains__(self, k):
-        with self._lock:
-            return k in self._val
 
-    def lock(self):
-        return self._lock
+class _Cache:
+
+    def __init__(self):
+        self._data_lock_dict = dict()
+        self._data_lock_dict_lock = threading.Lock()
+        self._data = _TDict()
+
+    def get(self, k, make_val):
+        with self._data_lock_dict_lock:
+            # This block finishes instantly
+            try:
+                k_lock = self._data_lock_dict[k]
+            except:
+                k_lock = threading.Lock()
+                self._data_lock_dict[k] = k_lock
+
+        with k_lock:
+            try:
+                return self._data[k]
+            except: # This block could take time to finish
+                val = make_val()
+                self._data[k] = val
+                return val
 
 
 class _TSet(_TVal):
