@@ -8,7 +8,6 @@ import buildpy.vx
 
 def main(argv):
     doctest.testmod(buildpy.vx, raise_on_error=True)
-    # doctest.testmod(buildpy.vx)
 
     @buildpy.vx.DSL.let
     def _():
