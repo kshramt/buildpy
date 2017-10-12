@@ -333,13 +333,11 @@ class _ThreadPool:
                             dj._dry_run.set_self_or_eq(need_update and self._dry_run)
                             if dj.n_rest() == 0:
                                 self.push_job(dj)
-        except Exception as e:
+        except Exception as e: # Propagate Exception caused by a bug in buildpy code to the main thread.
             exc_type, exc_obj, exc_tb = sys.exc_info()
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
             logging.error(str(exc_type) + " " + str(fname) + " " + str(exc_tb.tb_lineno))
             logging.error(repr(e))
-            if not self._keep_going:
-                self._die(e)
         finally:
             with self._threads_loc:
                 try:
@@ -348,6 +346,7 @@ class _ThreadPool:
                 except:
                     pass
 
+            self._die(e)
 
     def _die(self, e):
         _thread.interrupt_main()
