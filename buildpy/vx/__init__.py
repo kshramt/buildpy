@@ -293,7 +293,7 @@ class _ThreadPool:
         try:
             while True:
                 try:
-                    j = self._queue.get(block=True, timeout=0.02)
+                    j = self._queue.get(block=True, timeout=0.01)
                 except queue.Empty:
                     break
                 assert j.n_rest() == 0
