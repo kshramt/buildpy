@@ -338,15 +338,13 @@ class _ThreadPool:
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
             logging.error(str(exc_type) + " " + str(fname) + " " + str(exc_tb.tb_lineno))
             logging.error(repr(e))
-        finally:
-            with self._threads_loc:
-                try:
-                    self._threads.remove(threading.current_thread())
-                    self._unwaited_threads.remove(threading.current_thread())
-                except:
-                    pass
-
             self._die(e)
+        with self._threads_loc:
+            try:
+                self._threads.remove(threading.current_thread())
+                self._unwaited_threads.remove(threading.current_thread())
+            except:
+                pass
 
     def _die(self, e):
         _thread.interrupt_main()
