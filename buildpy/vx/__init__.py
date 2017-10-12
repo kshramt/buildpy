@@ -292,8 +292,9 @@ class _ThreadPool:
     def _worker(self):
         try:
             while True:
-                j = self._pop_job()
-                if not j:
+                try:
+                    j = self._queue.get(block=True, timeout=0.02)
+                except queue.Empty:
                     break
                 assert j.n_rest() == 0
                 got_error = False
@@ -347,11 +348,6 @@ class _ThreadPool:
                 except:
                     pass
 
-    def _pop_job(self):
-        try:
-            return self._queue.get(block=True, timeout=0.02)
-        except queue.Empty:
-            return False
 
     def _die(self, e):
         _thread.interrupt_main()
