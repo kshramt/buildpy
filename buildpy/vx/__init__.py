@@ -190,6 +190,12 @@ class _Job:
         with self._lock:
             self._n_rest = x
 
+    def dry_run(self):
+        return self._dry_run.val()
+
+    def dry_run_set_self_or(self, x):
+        return self._dry_run.set_self_or(x)
+
     def write(self, file=sys.stdout):
         for t in self.ts:
             print(t, file=file)
@@ -218,7 +224,7 @@ class _FileJob(_Job):
             DSL.rm(t)
 
     def need_update(self):
-        if self._dry_run.val():
+        if self.dry_run():
             return True
         try:
             t_ts = min(os.path.getmtime(t) for t in self.ts)
@@ -257,6 +263,9 @@ class _ThreadPool:
         self._threads_loc = threading.Lock()
         self._queue = queue.Queue()
         self._n_running = _TInt(0)
+
+    def dry_run(self):
+        return self._dry_run
 
     def push_jobs(self, jobs):
         # pre-load `jobs` to avoid a situation where no active thread exist while a job is enqueued
@@ -309,7 +318,7 @@ class _ThreadPool:
                             time.sleep(1)
                     self._n_running.inc()
                     try:
-                        if self._dry_run:
+                        if self.dry_run():
                             j.write()
                             print()
                         else:
@@ -330,7 +339,7 @@ class _ThreadPool:
                         # top targets does not have dependent jobs
                         for dj in self._dependent_jobs.get(t, ()):
                             dj.dec_n_rest()
-                            dj._dry_run.set_self_or_eq(need_update and self._dry_run)
+                            dj.dry_run_set_self_or(need_update and self.dry_run())
                             if dj.n_rest() == 0:
                                 self.push_job(dj)
         except Exception as e: # Propagate Exception caused by a bug in buildpy code to the main thread.
@@ -466,7 +475,7 @@ class _TBool(_TVal):
     def __init__(self, val):
         super().__init__(val)
 
-    def set_self_or_eq(self, x):
+    def set_self_or(self, x):
         with self._lock:
             self._val = self._val or x
 
