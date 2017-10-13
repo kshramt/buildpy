@@ -93,14 +93,20 @@ class DSL:
         self._use_hash = use_hash
         self._time_of_dep_cache = _Cache()
 
-    def file(self, targets, deps, desc=None, use_hash=None):
+    def file(self, targets, deps, desc=None, use_hash=None, serial=False):
+        """Declare a file job.
+        Arguments:
+            use_hash: Use the file checksum in addition to the modification time.
+            serial: Jobs declared as `@file(serial=True)` runs exclusively to each other.
+                The argument maybe useful to declare tasks that require a GPU or large amount of memory.
+        """
         if use_hash is None:
             use_hash = self._use_hash
         targets = _listize(targets)
         deps = _listize(deps)
 
         def _(f):
-            j = _FileJob(f, targets, deps, [desc], use_hash, self._time_of_dep_cache)
+            j = _FileJob(f, targets, deps, [desc], use_hash, serial, self._time_of_dep_cache)
             for t in targets:
                 _set_unique(self._job_of_target, t, j)
             return _do_nothing
@@ -190,6 +196,9 @@ class _Job:
         with self._lock:
             self._n_rest = x
 
+    def serial(self):
+        return False
+
     def dry_run(self):
         return self._dry_run.val()
 
@@ -211,13 +220,20 @@ class _PhonyJob(_Job):
 
 
 class _FileJob(_Job):
-    def __init__(self, f, ts, ds, descs, use_hash, time_of_dep_cache):
+    def __init__(self, f, ts, ds, descs, use_hash, serial, time_of_dep_cache):
         super().__init__(f, ts, ds, descs)
         self._time_of_dep = _hash_time_of if use_hash else _time_of
+        self._serial = _TBool(serial)
         self._time_of_dep_cache = time_of_dep_cache
         self._hash_orig = None
         self._hash_curr = None
         self._cache_path = None
+
+    def __repr__(self):
+        return f"{type(self).__name__}({repr(self.ts)}, {repr(self.ds)}, descs={repr(self.descs)}, serial={self.serial()})"
+
+    def serial(self):
+        return self._serial.val()
 
     def rm_targets(self):
         for t in self.ts:
@@ -262,6 +278,8 @@ class _ThreadPool:
         self._unwaited_threads = _TSet()
         self._threads_loc = threading.Lock()
         self._queue = queue.Queue()
+        self._serial_queue = queue.Queue()
+        self._serial_queue_lock = threading.Lock()
         self._n_running = _TInt(0)
 
     def dry_run(self):
@@ -271,12 +289,12 @@ class _ThreadPool:
         # pre-load `jobs` to avoid a situation where no active thread exist while a job is enqueued
         rem = max(len(jobs) - self._n_max, 0)
         for i in range(rem):
-            self._queue.put(jobs[i])
+            self._enq_job(jobs[i])
         for i in range(rem, len(jobs)):
             self.push_job(jobs[i])
 
     def push_job(self, j):
-        self._queue.put(j)
+        self._enq_job(j)
         with self._threads_loc:
             if (
                     len(self._threads) < 1 or (
@@ -290,6 +308,12 @@ class _ThreadPool:
                 # A thread should be `start`ed before `join`ed
                 self._unwaited_threads.add(t)
 
+    def _enq_job(self, j):
+        if j.serial():
+            self._serial_queue.put(j)
+        else:
+            self._queue.put(j)
+
     def wait(self):
         while True:
             try:
@@ -301,10 +325,18 @@ class _ThreadPool:
     def _worker(self):
         try:
             while True:
-                try:
-                    j = self._queue.get(block=True, timeout=0.01)
-                except queue.Empty:
-                    break
+                j = None
+                if self._serial_queue_lock.acquire(blocking=False):
+                    try:
+                        j = self._serial_queue.get(block=False)
+                        assert j.serial()
+                    except queue.Empty:
+                        self._serial_queue_lock.release()
+                if j is None:
+                    try:
+                        j = self._queue.get(block=True, timeout=0.01)
+                    except queue.Empty:
+                        break
                 assert j.n_rest() == 0
                 got_error = False
                 need_update = j.need_update()
@@ -333,6 +365,8 @@ class _ThreadPool:
                         else:
                             self._die(e)
                     self._n_running.dec()
+                if j.serial():
+                    self._serial_queue_lock.release()
                 j.set_n_rest(-1)
                 if not got_error:
                     for t in j.ts:
