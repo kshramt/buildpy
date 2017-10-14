@@ -54,18 +54,18 @@ def _(j):
 
 
 @loop(["x", "y", "z"])
-def _1(x):
+def _(x):
     ts = [f"{x}1", f"{x}2", f"{x}3"]
     @file(ts, [f"{x}0"], serial=True)
-    def _2(j):
+    def _(j):
         time.sleep(1)
         sh(f"touch {' '.join(j.ts)}")
 
     @loop(ts)
-    def _3(y):
+    def _(y):
         t = "p" + y
         @file([t], [y])
-        def _4(j):
+        def _(j):
             time.sleep(1)
             sh(f"touch {j.ts[0]}")
         phony("all", [t])
