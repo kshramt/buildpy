@@ -144,7 +144,7 @@ class DSL:
                     self._deps_of_phony,
                     _nil,
                 )
-            _process_jobs(leaf_jobs, dependent_jobs, args.keep_going, args.jobs, args.load_average, args.dry_run)
+            _process_jobs(leaf_jobs, dependent_jobs, args.keep_going, args.jobs, args.n_serial, args.load_average, args.dry_run)
 
     def main(self, argv):
         args = _parse_argv(argv[1:])
@@ -266,8 +266,9 @@ class _FileJob(_Job):
 
 
 class _ThreadPool:
-    def __init__(self, dependent_jobs, deferred_errors, keep_going, n_max, load_average, dry_run):
+    def __init__(self, dependent_jobs, deferred_errors, keep_going, n_max, n_serial_max, load_average, dry_run):
         assert n_max > 0
+        assert n_serial_max > 0
         self._dependent_jobs = dependent_jobs
         self._deferred_errors = deferred_errors
         self._keep_going = keep_going
@@ -279,7 +280,7 @@ class _ThreadPool:
         self._threads_loc = threading.Lock()
         self._queue = queue.Queue()
         self._serial_queue = queue.Queue()
-        self._serial_queue_lock = threading.Lock()
+        self._serial_queue_lock = threading.Semaphore(n_serial_max)
         self._n_running = _TInt(0)
 
     def dry_run(self):
@@ -559,6 +560,12 @@ def _parse_argv(argv):
         help="Number of parallel external jobs.",
     )
     parser.add_argument(
+        "--n-serial",
+        type=int,
+        default=1,
+        help="Number of parallel serial jobs.",
+    )
+    parser.add_argument(
         "-l", "--load-average",
         type=float,
         default=float("inf"),
@@ -596,6 +603,7 @@ def _parse_argv(argv):
     )
     args = parser.parse_args(argv)
     assert args.jobs > 0
+    assert args.n_serial > 0
     assert args.load_average > 0
     if not args.targets:
         args.targets.append("all")
@@ -660,9 +668,9 @@ def _escape(s):
     return "\"" + "".join('\\"' if x == "\"" else x for x in s) + "\""
 
 
-def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, load_average, dry_run):
+def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, n_serial, load_average, dry_run):
     deferred_errors = queue.Queue()
-    tp = _ThreadPool(dependent_jobs, deferred_errors, keep_going, n_jobs, load_average, dry_run)
+    tp = _ThreadPool(dependent_jobs, deferred_errors, keep_going, n_jobs, n_serial, load_average, dry_run)
     tp.push_jobs(jobs)
     tp.wait()
     if deferred_errors.qsize() > 0:
