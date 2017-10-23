@@ -111,6 +111,12 @@ To execute the declared jobs, please add the following line to your `build.py`:
 dsl.main(sys.argv)
 ```
 
+## News
+
+### v2.5.0
+
+- Support parallel execution of serial jobs
+
 ## Development
 
 ### Release of a new version
