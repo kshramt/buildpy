@@ -21,9 +21,6 @@ CACHE_DIR = os.path.join(os.getcwd(), ".cache", "buildpy")
 BUF_SIZE = 65535
 
 logger = logging.getLogger(__name__)
-_hdl = logging.StreamHandler(sys.stderr)
-_hdl.setFormatter(logging.Formatter("%(levelname)s:\t%(asctime)s\t%(filename)s\t%(funcName)s\t%(lineno)d\t%(message)s", datefmt="%Y-%m-%dT%H:%M:%S"))
-logger.addHandler(_hdl)
 
 
 class DSL:
@@ -148,7 +145,7 @@ class DSL:
 
     def main(self, argv):
         args = _parse_argv(argv[1:])
-        set_log_level(args.log)
+        logger.setLevel(getattr(logging, args.log.upper()))
         self.finish(args)
 
 
@@ -358,8 +355,8 @@ class _ThreadPool:
                             j.execute()
                     except Exception as e:
                         got_error = True
-                        logging.error(repr(j))
-                        logging.error(repr(e))
+                        logger.error(repr(j))
+                        logger.error(repr(e))
                         j.rm_targets()
                         if self._keep_going:
                             self._deferred_errors.put((j, e))
@@ -380,8 +377,8 @@ class _ThreadPool:
         except Exception as e: # Propagate Exception caused by a bug in buildpy code to the main thread.
             exc_type, exc_obj, exc_tb = sys.exc_info()
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            logging.error(str(exc_type) + " " + str(fname) + " " + str(exc_tb.tb_lineno))
-            logging.error(repr(e))
+            logger.error(str(exc_type) + " " + str(fname) + " " + str(exc_tb.tb_lineno))
+            logger.error(repr(e))
             self._die(e)
         with self._threads_loc:
             try:
@@ -610,17 +607,6 @@ def _parse_argv(argv):
     return args
 
 
-def set_log_level(log):
-    level = dict(
-        debug=logging.DEBUG,
-        info=logging.INFO,
-        warning=logging.WARNING,
-        error=logging.ERROR,
-        critical=logging.CRITICAL,
-    )[log.lower()]
-    logger.setLevel(level)
-
-
 def _print_descriptions(job_of_target):
     for target in sorted(job_of_target.keys()):
         print(target)
@@ -674,11 +660,11 @@ def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, n_serial, load_avera
     tp.push_jobs(jobs)
     tp.wait()
     if deferred_errors.qsize() > 0:
-        logging.error("Following errors have thrown during the execution")
+        logger.error("Following errors have thrown during the execution")
         for _ in range(deferred_errors.qsize()):
             j, e = deferred_errors.get()
-            logging.error(repr(e))
-            logging.error(repr(j))
+            logger.error(repr(e))
+            logger.error(repr(j))
         raise Err("Execution failed.")
 
 
