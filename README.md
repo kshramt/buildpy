@@ -113,6 +113,10 @@ dsl.main(sys.argv)
 
 ## News
 
+### v2.6.0
+
+- `buildpy.vx.logger` no longer has handlers.
+
 ### v2.5.0
 
 - Support parallel execution of serial jobs
