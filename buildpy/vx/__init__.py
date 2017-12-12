@@ -79,7 +79,7 @@ class DSL:
         print(f"os.remove({repr(path)})", file=sys.stderr)
         try:
             return os.remove(path)
-        except:
+        except Exception:
             pass
 
     def __init__(self, use_hash=False):
@@ -241,7 +241,7 @@ class _FileJob(_Job):
             return True
         try:
             t_ts = min(os.path.getmtime(t) for t in self.ts)
-        except:
+        except Exception:
             # Intentionally create hash caches.
             for d in self.unique_ds:
                 self._time_of_dep_from_cache(d)
@@ -384,7 +384,7 @@ class _ThreadPool:
             try:
                 self._threads.remove(threading.current_thread())
                 self._unwaited_threads.remove(threading.current_thread())
-            except:
+            except Exception:
                 pass
 
     def _die(self, e):
@@ -430,14 +430,14 @@ class _Cache:
             # This block finishes instantly
             try:
                 k_lock = self._data_lock_dict[k]
-            except:
+            except Exception:
                 k_lock = threading.Lock()
                 self._data_lock_dict[k] = k_lock
 
         with k_lock:
             try:
                 return self._data[k]
-            except: # This block could take time to finish
+            except Exception: # This block could take time to finish
                 val = make_val()
                 self._data[k] = val
                 return val
@@ -754,7 +754,7 @@ def _hash_time_of(path, cache_dir):
     t_path = os.path.getmtime(path)
     try:
         cache_path_stat = os.stat(cache_path)
-    except:
+    except Exception:
         h_path = _hash_of_path(path)
         _dump_hash_time_cache(cache_path, t_path, h_path)
         return t_path
@@ -766,7 +766,7 @@ def _hash_time_of(path, cache_dir):
     else:
         try:
             t_cache, h_cache = _load_hash_time_cache(cache_path)
-        except:
+        except Exception:
             h_path = _hash_of_path(path)
             _dump_hash_time_cache(cache_path, t_path, h_path)
             return t_path
