@@ -23,6 +23,7 @@ setup(
     packages=[
         "buildpy.v1",
         "buildpy.v2",
+        "buildpy.v3",
         "buildpy.vx",
     ],
     zip_safe=True,

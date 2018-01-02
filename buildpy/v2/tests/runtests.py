@@ -3,15 +3,15 @@
 import doctest
 import sys
 
-import buildpy.vx
+import buildpy.v2
 
 
 def main(argv):
-    doctest.testmod(buildpy.vx, raise_on_error=True)
+    doctest.testmod(buildpy.v2, raise_on_error=True)
 
-    @buildpy.vx.DSL.let
+    @buildpy.v2.DSL.let
     def _():
-        s = buildpy.vx._TSet()
+        s = buildpy.v2._TSet()
         s.add(s.add(s.add(1)))
         assert len(s) == 2
         s.remove(s.remove(1))
