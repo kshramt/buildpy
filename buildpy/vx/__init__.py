@@ -775,13 +775,13 @@ def _hash_time_of(path, cache_dir):
             return t_cache
         else:
             h_path = _hash_of_path(path)
-            if h_path != h_cache:
-                _dump_hash_time_cache(cache_path, t_path, h_path)
-                return t_path
-            else:
+            if h_path == h_cache:
                 t_now = time.time()
                 os.utime(cache_path, (t_now, t_now))
                 return t_cache
+            else:
+                _dump_hash_time_cache(cache_path, t_path, h_path)
+                return t_path
 
 
 def _dump_hash_time_cache(cache_path, t_path, h_path):
