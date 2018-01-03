@@ -771,7 +771,7 @@ def _hash_time_of(path, cache_dir):
             _dump_hash_time_cache(cache_path, t_path, h_path)
             return t_path
 
-        if cache_path_stat.st_mtime > os.path.getmtime(path):
+        if cache_path_stat.st_mtime > t_path:
             return t_cache
         else:
             h_path = _hash_of_path(path)
