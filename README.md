@@ -113,6 +113,10 @@ dsl.main(sys.argv)
 
 ## News
 
+### v2.7.0
+
+- Use the JSON format to store a cache file
+
 ### v2.6.0
 
 - `buildpy.vx.logger` no longer has handlers.
