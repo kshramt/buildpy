@@ -3,12 +3,12 @@ import argparse
 import fcntl
 import hashlib
 import itertools
+import json
 import logging
 import math
 import os
 import queue
 import shutil
-import struct
 import subprocess
 import sys
 import threading
@@ -759,46 +759,39 @@ def _hash_time_of(path, cache_dir):
         _dump_hash_time_cache(cache_path, t_path, h_path)
         return t_path
 
-    if cache_path_stat.st_size != 28:
+    try:
+        t_cache, h_cache = _load_hash_time_cache(cache_path)
+    except Exception:
         h_path = _hash_of_path(path)
         _dump_hash_time_cache(cache_path, t_path, h_path)
         return t_path
-    else:
-        try:
-            t_cache, h_cache = _load_hash_time_cache(cache_path)
-        except Exception:
-            h_path = _hash_of_path(path)
-            _dump_hash_time_cache(cache_path, t_path, h_path)
-            return t_path
 
-        if cache_path_stat.st_mtime > t_path:
+    if cache_path_stat.st_mtime > t_path:
+        return t_cache
+    else:
+        h_path = _hash_of_path(path)
+        if h_path == h_cache:
+            t_now = time.time()
+            os.utime(cache_path, (t_now, t_now))
             return t_cache
         else:
-            h_path = _hash_of_path(path)
-            if h_path == h_cache:
-                t_now = time.time()
-                os.utime(cache_path, (t_now, t_now))
-                return t_cache
-            else:
-                _dump_hash_time_cache(cache_path, t_path, h_path)
-                return t_path
+            _dump_hash_time_cache(cache_path, t_path, h_path)
+            return t_path
 
 
 def _dump_hash_time_cache(cache_path, t_path, h_path):
     logger.debug(str(threading.get_ident()) + "\t" + cache_path)
     _mkdir(_dirname(cache_path))
-    with open(cache_path, "wb") as fp:
+    with open(cache_path, "w") as fp:
         fcntl.flock(fp, fcntl.LOCK_EX)
-        fp.write(struct.pack("d", t_path))
-        fp.write(h_path)
+        json.dump(dict(t=t_path, h=h_path), fp)
 
 
 def _load_hash_time_cache(cache_path):
-    with open(cache_path, "rb") as fp:
+    with open(cache_path, "r") as fp:
         fcntl.flock(fp, fcntl.LOCK_EX)
-        t = struct.unpack("d", fp.read(8))[0]
-        h = fp.read(20)
-        return t, h
+        data = json.load(fp)
+    return data["t"], data["h"]
 
 
 def _hash_of_path(path, buf_size=BUF_SIZE):
@@ -814,7 +807,7 @@ def _hash_of_path(path, buf_size=BUF_SIZE):
                 h.update(buf[:n])
             else:
                 h.update(buf)
-    return h.digest()
+    return h.hexdigest()
 
 
 def _mkdir(path):
