@@ -66,17 +66,15 @@ class DSL:
 
     @staticmethod
     def mkdir(path):
-        print(f"os.makedirs({repr(path)}, exist_ok=True)", file=sys.stderr)
         return _mkdir(path)
 
     @staticmethod
     def mv(src, dst):
-        print(f"shutil.move({repr(src)}, {repr(dst)})", file=sys.stderr)
         return shutil.move(src, dst)
 
     @staticmethod
     def rm(path):
-        print(f"os.remove({repr(path)})", file=sys.stderr)
+        logger.info(path)
         try:
             return os.remove(path)
         except Exception:
