@@ -113,6 +113,10 @@ dsl.main(sys.argv)
 
 ## News
 
+### v3.1.0
+
+- Support `DSL.rm("dir")`
+
 ### v3.0.0
 
 - Use the JSON format to store a cache file
