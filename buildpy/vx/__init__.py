@@ -78,7 +78,7 @@ class DSL:
         try:
             return os.remove(path)
         except Exception:
-            pass
+            return shutil.rmtree(path, ignore_errors=True)
 
     def __init__(self, use_hash=False):
         self._job_of_target = dict()
