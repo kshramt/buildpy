@@ -156,11 +156,12 @@ class Err(Exception):
 
 
 class _Job:
-    def __init__(self, f, ts, ds, descs):
+    def __init__(self, f, ts, ds, descs, priority):
         self.f = f
         self.ts = _listize(ts)
         self.ds = _listize(ds)
         self.descs = [desc for desc in descs if desc is not None]
+        self.priority = priority
         self.unique_ds = _unique(ds)
         self._n_rest = len(self.unique_ds)
         self.visited = False
@@ -169,6 +170,9 @@ class _Job:
 
     def __repr__(self):
         return f"{type(self).__name__}({repr(self.ts)}, {repr(self.ds)}, descs={repr(self.descs)})"
+
+    def __lt__(self, other):
+        return self.priority < other.priority
 
     def execute(self):
         self.f(self)
@@ -208,15 +212,15 @@ class _Job:
 
 
 class _PhonyJob(_Job):
-    def __init__(self, f, ts, ds, descs):
+    def __init__(self, f, ts, ds, descs, priority=0):
         if len(ts) != 1:
             raise Err(f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}")
-        super().__init__(f, ts, ds, descs)
+        super().__init__(f, ts, ds, descs, priority)
 
 
 class _FileJob(_Job):
-    def __init__(self, f, ts, ds, descs, use_hash, serial, time_of_dep_cache):
-        super().__init__(f, ts, ds, descs)
+    def __init__(self, f, ts, ds, descs, use_hash, serial, time_of_dep_cache, priority=0):
+        super().__init__(f, ts, ds, descs, priority)
         self._time_of_dep = _hash_time_of if use_hash else _time_of
         self._serial = _TBool(serial)
         self._time_of_dep_cache = time_of_dep_cache
@@ -273,8 +277,8 @@ class _ThreadPool:
         self._threads = _TSet()
         self._unwaited_threads = _TSet()
         self._threads_loc = threading.Lock()
-        self._queue = queue.Queue()
-        self._serial_queue = queue.Queue()
+        self._queue = queue.PriorityQueue()
+        self._serial_queue = queue.PriorityQueue()
         self._serial_queue_lock = threading.Semaphore(n_serial_max)
         self._n_running = _TInt(0)
 
