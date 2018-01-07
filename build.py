@@ -90,7 +90,7 @@ def _(v):
         test_py_done = test_py + ".done"
         phony("check", [test_py_done])
 
-        @file([test_py_done], [test_py] + v_py_files, desc=f"Test {test_py}")
+        @file([test_py_done], [test_py] + v_py_files, desc=f"Test {test_py}", priority=-1)
         def _(j):
             sh(f"""
             {python} {j.ds[0]}

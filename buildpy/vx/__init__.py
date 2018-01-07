@@ -19,6 +19,7 @@ __version__ = "3.1.0"
 
 CACHE_DIR = os.path.join(os.getcwd(), ".cache", "buildpy")
 BUF_SIZE = 65535
+_PRIORITY_DEFAULT = 0
 
 logger = logging.getLogger(__name__)
 
@@ -85,10 +86,11 @@ class DSL:
         self._f_of_phony = dict()
         self._deps_of_phony = dict()
         self._descs_of_phony = dict()
+        self._priority_of_phony = dict()
         self._use_hash = use_hash
         self._time_of_dep_cache = _Cache()
 
-    def file(self, targets, deps, desc=None, use_hash=None, serial=False):
+    def file(self, targets, deps, desc=None, use_hash=None, serial=False, priority=_PRIORITY_DEFAULT):
         """Declare a file job.
         Arguments:
             use_hash: Use the file checksum in addition to the modification time.
@@ -101,15 +103,17 @@ class DSL:
         deps = _listize(deps)
 
         def _(f):
-            j = _FileJob(f, targets, deps, [desc], use_hash, serial, self._time_of_dep_cache)
+            j = _FileJob(f, targets, deps, [desc], use_hash, serial, self._time_of_dep_cache, priority=priority)
             for t in targets:
                 _set_unique(self._job_of_target, t, j)
             return _do_nothing
         return _
 
-    def phony(self, target, deps, desc=None):
+    def phony(self, target, deps, desc=None, priority=None):
         self._deps_of_phony.setdefault(target, []).extend(_listize(deps))
         self._descs_of_phony.setdefault(target, []).append(desc)
+        if priority is not None:
+            self._priority_of_phony[target] = priority
 
         def _(f):
             _set_unique(self._f_of_phony, target, f)
@@ -119,7 +123,7 @@ class DSL:
     def finish(self, args):
         assert args.jobs > 0
         assert args.load_average > 0
-        _collect_phonies(self._job_of_target, self._deps_of_phony, self._f_of_phony, self._descs_of_phony)
+        _collect_phonies(self._job_of_target, self._deps_of_phony, self._f_of_phony, self._descs_of_phony, priority_of_phony=self._priority_of_phony)
         if args.descriptions:
             _print_descriptions(self._job_of_target)
         elif args.dependencies:
@@ -212,14 +216,14 @@ class _Job:
 
 
 class _PhonyJob(_Job):
-    def __init__(self, f, ts, ds, descs, priority=0):
+    def __init__(self, f, ts, ds, descs, priority):
         if len(ts) != 1:
             raise Err(f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}")
         super().__init__(f, ts, ds, descs, priority)
 
 
 class _FileJob(_Job):
-    def __init__(self, f, ts, ds, descs, use_hash, serial, time_of_dep_cache, priority=0):
+    def __init__(self, f, ts, ds, descs, use_hash, serial, time_of_dep_cache, priority):
         super().__init__(f, ts, ds, descs, priority)
         self._time_of_dep = _hash_time_of if use_hash else _time_of
         self._serial = _TBool(serial)
@@ -673,13 +677,13 @@ def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, n_serial, load_avera
         raise Err("Execution failed.")
 
 
-def _collect_phonies(job_of_target, deps_of_phony, f_of_phony, descs_of_phony):
+def _collect_phonies(job_of_target, deps_of_phony, f_of_phony, descs_of_phony, priority_of_phony):
     for target, deps in deps_of_phony.items():
         targets = _listize(target)
         deps = _listize(deps)
         _set_unique(
             job_of_target, target,
-            _PhonyJob(f_of_phony.get(target, _do_nothing), targets, deps, descs_of_phony[target]),
+            _PhonyJob(f_of_phony.get(target, _do_nothing), targets, deps, descs_of_phony[target], priority=priority_of_phony.get(target, _PRIORITY_DEFAULT)),
         )
 
 
