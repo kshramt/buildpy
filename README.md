@@ -113,6 +113,10 @@ dsl.main(sys.argv)
 
 ## News
 
+### v3.2.0
+
+- Support `{file,phony}(priority=)` (smaller is higher).
+
 ### v3.1.0
 
 - Support `DSL.rm("dir")`
