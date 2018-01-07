@@ -376,18 +376,21 @@ class _ThreadPool:
                             dj.dry_run_set_self_or(need_update and self.dry_run())
                             if dj.n_rest() == 0:
                                 self.push_job(dj)
+            with self._threads_loc:
+                try:
+                    self._threads.remove(threading.current_thread())
+                except KeyError:
+                    pass
+                try:
+                    self._unwaited_threads.remove(threading.current_thread())
+                except KeyError:
+                    pass
         except Exception as e: # Propagate Exception caused by a bug in buildpy code to the main thread.
             exc_type, exc_obj, exc_tb = sys.exc_info()
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
             logger.error(str(exc_type) + " " + str(fname) + " " + str(exc_tb.tb_lineno))
             logger.error(repr(e))
             self._die(e)
-        with self._threads_loc:
-            try:
-                self._threads.remove(threading.current_thread())
-                self._unwaited_threads.remove(threading.current_thread())
-            except Exception:
-                pass
 
     def _die(self, e):
         _thread.interrupt_main()
