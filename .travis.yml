@@ -8,7 +8,7 @@ python:
 notifications:
     email: false
 install:
-  - python setup.py install
+  - pip install .
 script:
   - python build.py check all $FLAGS
 env:
