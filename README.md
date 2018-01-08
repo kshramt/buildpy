@@ -2,27 +2,27 @@
 
 [![Build Status](https://travis-ci.org/kshramt/buildpy.svg?branch=master)](https://travis-ci.org/kshramt/buildpy)
 
-BuildPy is a build tool to manage a data analysis pipeline.
-It has following features:
+BuildPy is a workflow engine to manage a data analysis pipeline.
+It supports following features:
 
-- Parallel processing (similar to the `-j` option of Make)
-- Correct handling of generation of multiple output files from a single command invocation
-- Dry-run (similar to the `-n` option of Make)
-- Option to enable content-based update scheme (similar to SCons)
-- Deferred error (similar to the `-k` option of Make)
-- Descriptions for jobs (similar to the `desc` method of Rake)
-- Load-average based control of the number of parallel jobs (similar to the `-l` option of Make)
-- Machine-readable output of the dependency graph (similar to the `-P` option of Rake)
+- Parallel processing (similar to the `--jobs` of GNU Make)
+- Declaration of multiple targets for a single job
+- Dry-run (similar to the `--dry-run` of GNU Make)
+- Content-based update scheme (similar to SCons)
+- Deferred error (similar to the `--keep-going` of Make)
+- Job scheduling based on load average (similar to `--load-average` of Make)
+- Machine-readable output of a dependency graph (similar to `--prereqs` of Rake)
 
-BuildPy supports Python version ≥ 3.6 and is available from [PyPI](https://pypi.python.org/pypi/buildpy):
+BuildPy requires Python version ≥ 3.6 and is available from [PyPI](https://pypi.python.org/pypi/buildpy):
 
 ```bash
-pip install --user --upgrade buildpy
+pip install buildpy
 ```
 
 The typical form of `build.py` is as follows:
 
 ```bash
+python build.py --help
 python build.py all --jobs="$(nproc)" --keep-going
 ```
 
@@ -32,7 +32,7 @@ import sys
 import buildpy.vx
 
 dsl = buildpy.vx.DSL()
-# dsl = buildpy.DSL(use_hash=True) # use content-based update scheme
+# dsl = buildpy.DSL(use_hash=True) # use the content-based update scheme
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
@@ -67,7 +67,7 @@ The instance, `dsl`, provides methods to construct a dependency graph and to exe
 
 ```py
 # Make `target` from `dep1` and `dep2` by `cat dep1 dep2 >| target`.
-# You are able to pass a description of the job via the `desc` optional argument.
+# You are able to pass a description of the job via the `desc` keyword argument.
 @dsl.file("target", ["dep1", "dep2"], desc="Optional description argument")
 def _(job):
     dsl.sh(f"cat {' '.join(job.ds)} >| {job.ts[0]}")
