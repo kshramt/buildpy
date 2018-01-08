@@ -11,7 +11,8 @@ It supports following features:
 - Content-based update scheme (similar to SCons)
 - Deferred error (similar to the `--keep-going` of Make)
 - Job scheduling based on load average (similar to `--load-average` of Make)
-- Machine-readable output of a dependency graph (similar to `--prereqs` of Rake)
+- DOT-formatted output a dependency graph (similar to `--prereqs` of Rake)
+- Pure Python code without external dependencies
 
 BuildPy requires Python version ≥ 3.6 and is available from [PyPI](https://pypi.python.org/pypi/buildpy):
 
