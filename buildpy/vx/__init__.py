@@ -711,7 +711,7 @@ def _make_graph(
         return
     j.visited = True
     current_call_chain = _Cons(target, call_chain)
-    for dep in j.unique_ds:
+    for dep in sorted(j.unique_ds, key=lambda dep: _key_to_sort_unique_ds(dep, job_of_target)):
         dependent_jobs.setdefault(dep, []).append(j)
         _make_graph(
             dependent_jobs,
@@ -723,6 +723,13 @@ def _make_graph(
             current_call_chain,
         )
     j.unique_ds or leaf_jobs.append(j)
+
+
+def _key_to_sort_unique_ds(dep, job_of_target):
+    try:
+        return job_of_target[dep].priority
+    except KeyError:
+        return math.inf
 
 
 def _listize(x):
