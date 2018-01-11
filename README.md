@@ -114,6 +114,10 @@ dsl.main(sys.argv)
 
 ## News
 
+### v3.3.1
+
+- Respect `job.priority` a bit more
+
 ### v3.2.0
 
 - Support `{file,phony}(priority=)` (smaller is higher).
