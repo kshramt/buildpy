@@ -766,7 +766,7 @@ def _hash_time_of(path, cache_dir):
     path cache_path -> min(path_time, cache_time)
     """
     logger.debug(str(threading.get_ident()) + "\t" + path)
-    cache_path = _jp(cache_dir, os.path.abspath(path))
+    cache_path = _jp(cache_dir, "file", os.path.abspath(path))
     t_path = os.path.getmtime(path)
     try:
         cache_path_stat = os.stat(cache_path)
