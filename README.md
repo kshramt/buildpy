@@ -114,6 +114,10 @@ dsl.main(sys.argv)
 
 ## News
 
+### v3.4.0
+
+- Tweak cache directory naming convention
+
 ### v3.3.1
 
 - Respect `job.priority` a bit more
