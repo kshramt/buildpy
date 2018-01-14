@@ -18,7 +18,7 @@ __version__ = "3.4.0"
 
 
 CACHE_DIR = os.path.join(os.getcwd(), ".cache", "buildpy")
-BUF_SIZE = 65535
+BUF_SIZE = 65536
 _PRIORITY_DEFAULT = 0
 
 logger = logging.getLogger(__name__)
