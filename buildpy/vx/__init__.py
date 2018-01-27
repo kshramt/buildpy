@@ -2,6 +2,7 @@ import _thread
 import argparse
 import fcntl
 import hashlib
+import io
 import itertools
 import json
 import logging
@@ -9,6 +10,7 @@ import math
 import os
 import queue
 import shutil
+import struct
 import subprocess
 import sys
 import threading
@@ -106,6 +108,51 @@ def _rm(path):
         return os.remove(path)
     except Exception:
         return shutil.rmtree(path, ignore_errors=True)
+
+
+def _serialize(x):
+    """
+    Supported data types:
+
+    * Integer (64 bits)
+    * Float (64 bits)
+    * String (UTF-8)
+    * List
+    * Dictionary
+    """
+
+    def _save(x, fp):
+        if isinstance(x, float):
+            fp.write(b"f")
+            fp.write(struct.pack("<d", x))
+        elif isinstance(x, int):
+            fp.write(b"i")
+            _save_int(x, fp)
+        elif isinstance(x, str):
+            b = x.encode("utf-8")
+            fp.write(b"s")
+            _save_int(len(b), fp)
+            fp.write(b)
+        elif isinstance(x, list):
+            fp.write(b"l")
+            _save_int(len(x), fp)
+            for v in x:
+                _save(v, fp)
+        elif isinstance(x, dict):
+            fp.write(b"d")
+            _save_int(len(x), fp)
+            for k in sorted(x.keys()):
+                _save(k, fp)
+                _save(x[k], fp)
+        else:
+            raise ValueError(f"Unsupported argument {x} of type {type(x)} for `_save`")
+
+    def _save_int(x, fp):
+        return fp.write(struct.pack("<q", x))
+
+    fp = io.BytesIO()
+    _save(x, fp)
+    return fp.getvalue()
 
 
 # Main
