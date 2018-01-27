@@ -114,6 +114,10 @@ dsl.main(sys.argv)
 
 ## News
 
+### v3.5.0
+
+- Add `DSL.serialize`, a canonical serializer.
+
 ### v3.4.0
 
 - Tweak cache directory naming convention
