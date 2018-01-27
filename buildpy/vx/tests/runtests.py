@@ -7,7 +7,9 @@ import buildpy.vx
 
 
 def main(argv):
-    doctest.testmod(buildpy.vx, raise_on_error=True)
+    result = doctest.testmod(buildpy.vx)
+    if result.failed > 0:
+        exit(1)
 
     @buildpy.vx.DSL.let
     def _():
