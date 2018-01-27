@@ -24,62 +24,103 @@ _PRIORITY_DEFAULT = 0
 logger = logging.getLogger(__name__)
 
 
+# Convenience routines to write build.py
+
+def _sh(
+    s,
+    check=True,
+    encoding="utf-8",
+    env=None,
+    executable="/bin/bash",
+    shell=True,
+    universal_newlines=True,
+    **kwargs,
+):
+    print(s, file=sys.stderr)
+    return subprocess.run(
+        s,
+        check=check,
+        encoding=encoding,
+        env=env,
+        executable=executable,
+        shell=shell,
+        universal_newlines=universal_newlines,
+        **kwargs,
+    )
+
+
+def _let(f):
+    f()
+
+
+def _loop(*lists, tform=itertools.product):
+    """
+    >>> _loop([1, 2], ["a", "b"])(lambda x, y: print(x, y))
+    1 a
+    1 b
+    2 a
+    2 b
+    >>> _loop([(1, "a"), (2, "b")], tform=lambda x: x)(lambda x, y: print(x, y))
+    1 a
+    2 b
+    """
+    def deco(f):
+        for xs in tform(*lists):
+            f(*xs)
+    return deco
+
+
+def _mkdir(path):
+    return os.makedirs(path, exist_ok=True)
+
+
+def _dirname(path):
+    """
+    >>> _dirname("")
+    '.'
+    >>> _dirname("a")
+    '.'
+    >>> _dirname("a/b")
+    'a'
+    """
+    return os.path.dirname(path) or os.path.curdir
+
+
+def _jp(path, *more):
+    """
+    >>> _jp(".", "a")
+    'a'
+    >>> _jp("a", "b")
+    'a/b'
+    >>> _jp("a", "b", "..")
+    'a'
+    >>> _jp("a", "/b", "c")
+    'a/b/c'
+    """
+    return os.path.normpath(os.path.sep.join((path, os.path.sep.join(more))))
+
+
+def _rm(path):
+    logger.info(path)
+    try:
+        return os.remove(path)
+    except Exception:
+        return shutil.rmtree(path, ignore_errors=True)
+
+
+# Main
+
 class DSL:
 
-    @staticmethod
-    def loop(*args, **kwargs):
-        return _loop(*args, **kwargs)
-
-    @staticmethod
-    def let(f):
-        f()
-
-    @staticmethod
-    def sh(
-        s,
-        check=True,
-        encoding="utf-8",
-        env=None,
-        executable="/bin/bash",
-        shell=True,
-        universal_newlines=True,
-        **kwargs,
-    ):
-        print(s, file=sys.stderr)
-        return subprocess.run(
-            s,
-            check=check,
-            encoding=encoding,
-            env=env,
-            executable=executable,
-            shell=shell,
-            universal_newlines=universal_newlines,
-            **kwargs,
-        )
-
-    @staticmethod
-    def dirname(path):
-        return _dirname(path)
-
-    @staticmethod
-    def jp(path, *more):
-        return _jp(path, *more)
-
-    @staticmethod
-    def mkdir(path):
-        return _mkdir(path)
-
-    @staticmethod
-    def mv(src, dst):
-        return shutil.move(src, dst)
-
-    @staticmethod
-    def rm(path):
-        logger.info(path)
-        try:
-            return os.remove(path)
-        except Exception:
-            return shutil.rmtree(path, ignore_errors=True)
+    sh = staticmethod(_sh)
+    let = staticmethod(_let)
+    loop = staticmethod(_loop)
+    dirname = staticmethod(_dirname)
+    jp = staticmethod(_jp)
+    mkdir = staticmethod(_mkdir)
+    mv = staticmethod(shutil.move)
+    rm = staticmethod(_rm)
+    serialize = staticmethod(_serialize)
 
     def __init__(self, use_hash=False):
         self._job_of_target = dict()
@@ -824,53 +865,6 @@ def _hash_of_path(path, buf_size=BUF_SIZE):
             else:
                 h.update(buf)
     return h.hexdigest()
-
-
-def _mkdir(path):
-    return os.makedirs(path, exist_ok=True)
-
-
-def _dirname(path):
-    """
-    >>> _dirname("")
-    '.'
-    >>> _dirname("a")
-    '.'
-    >>> _dirname("a/b")
-    'a'
-    """
-    return os.path.dirname(path) or os.path.curdir
-
-
-def _jp(path, *more):
-    """
-    >>> _jp(".", "a")
-    'a'
-    >>> _jp("a", "b")
-    'a/b'
-    >>> _jp("a", "b", "..")
-    'a'
-    >>> _jp("a", "/b", "c")
-    'a/b/c'
-    """
-    return os.path.normpath(os.path.sep.join((path, os.path.sep.join(more))))
-
-
-def _loop(*lists, tform=itertools.product):
-    """
-    >>> _loop([1, 2], ["a", "b"])(lambda x, y: print(x, y))
-    1 a
-    1 b
-    2 a
-    2 b
-    >>> _loop([(1, "a"), (2, "b")], tform=lambda x: x)(lambda x, y: print(x, y))
-    1 a
-    2 b
-    """
-    def deco(f):
-        for xs in tform(*lists):
-            f(*xs)
-    return deco
 
 
 def _do_nothing(*_):
