@@ -88,7 +88,7 @@ Like the `task` method of Rake or `.PHONY` rule of Make, you are able to declare
 # An invocation of `targetA` executes the decorated method, `_`, and prints `targetA invoked.`
 @dsl.phony("targetA", ["dep1", "dep2"], desc="Optional description argument")
 def _(job):
-    print(job.ds[0] + " invoked.")
+    print(job.ts[0] + " invoked.")
 
 # Make a phony target named `taregetB`, which depends on `dep3` and `dep4`.
 # An invocation of `targetB` executes no command.
