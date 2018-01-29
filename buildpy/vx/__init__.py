@@ -2,6 +2,7 @@ import _thread
 import argparse
 import fcntl
 import hashlib
+import inspect
 import io
 import itertools
 import json
@@ -27,6 +28,32 @@ logger = logging.getLogger(__name__)
 
 
 # Convenience routines to write build.py
+
+
+class _cd(object):
+    __slots__ = ["old", "new"]
+
+    def __init__(self, new):
+        self.new = new
+
+    def __call__(self, f):
+        with self as c:
+            if len(inspect.signature(f).parameters) == 1:
+                f(c)
+            else:
+                f()
+
+    def __enter__(self):
+        self.old = os.getcwd()
+        os.chdir(self.new)
+        return self
+
+    def __exit__(self, *_):
+        os.chdir(self.old)
+
+    def __repr__(self):
+        return f"#<{self.__class__.__name__} old={self.old}, new={self.new}>"
+
 
 def _sh(
     s,
@@ -167,6 +194,7 @@ class DSL:
     mkdir = staticmethod(_mkdir)
     mv = staticmethod(shutil.move)
     rm = staticmethod(_rm)
+    cd = staticmethod(_cd)
     serialize = staticmethod(_serialize)
 
     def __init__(self, use_hash=False):
