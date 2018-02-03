@@ -114,6 +114,10 @@ dsl.main(sys.argv)
 
 ## News
 
+### v3.6.0
+
+- Add `DSL.cd`.
+
 ### v3.5.0
 
 - Add `DSL.serialize`, a canonical serializer.
