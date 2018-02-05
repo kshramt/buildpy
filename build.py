@@ -42,7 +42,7 @@ all_files = set(
         check=True,
         universal_newlines=True,
         stdout=subprocess.PIPE,
-    ).stdout.split("\0")
+    ).stdout.rstrip("\0").split("\0")
 )
 py_files = set(path for path in all_files if path.endswith(".py"))
 buildpy_files =set(path for path in all_files if path.startswith(os.path.join("buildpy", "v")))
