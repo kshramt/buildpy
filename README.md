@@ -158,7 +158,7 @@ Add `"buildpy.v9"` to `setup.py`.
 
 ```bash
 cd buildpy
-mv v9 v10
+git mv v9 v10
 cp -a vx v9
 cd v9
 grep -l buildpy.vx -R . | xargs -n1 sed -i'' -e 's/buildpy.vx/buildpy.v9/g'
