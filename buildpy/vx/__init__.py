@@ -151,7 +151,7 @@ def _serialize(x):
 
     def _save(x, fp):
         if x is None:
-            fp.write("n")
+            fp.write(b"n")
         elif isinstance(x, float):
             fp.write(b"f")
             fp.write(struct.pack("<d", x))
