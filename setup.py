@@ -24,6 +24,7 @@ setup(
         "buildpy.v1",
         "buildpy.v2",
         "buildpy.v3",
+        "buildpy.v4",
         "buildpy.vx",
     ],
     zip_safe=True,
