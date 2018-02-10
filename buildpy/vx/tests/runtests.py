@@ -23,6 +23,8 @@ def main(argv):
 
     @buildpy.vx.DSL.let
     def _():
+        s = buildpy.vx._serialize(None)
+        assert s == b"n"
         s = buildpy.vx._serialize(1)
         assert s == b"i\x01\x00\x00\x00\x00\x00\x00\x00", s
         s = buildpy.vx._serialize(2)

@@ -141,6 +141,7 @@ def _serialize(x):
     """
     Supported data types:
 
+    * None
     * Integer (64 bits)
     * Float (64 bits)
     * String (UTF-8)
@@ -149,7 +150,9 @@ def _serialize(x):
     """
 
     def _save(x, fp):
-        if isinstance(x, float):
+        if x is None:
+            fp.write("n")
+        elif isinstance(x, float):
             fp.write(b"f")
             fp.write(struct.pack("<d", x))
         elif isinstance(x, int):
