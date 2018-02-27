@@ -946,8 +946,13 @@ def mtime_of_bq(uri, use_hash, meta):
     """
     import google.cloud.bigquery
 
-    p = _uriparse(uri)
-    project, dt = p.netloc.split(":", 1)
+    puri = _uriparse(uri)
+    assert puri.scheme == "bq", puri
+    assert puri.params == "", puri
+    assert puri.query == "", puri
+    assert puri.fragment == "", puri
+
+    project, dt = puri.netloc.split(":", 1)
     dataset, table = dt.split(".", 1)
     if "credential" in meta:
         client = google.cloud.bigquery.Client.from_service_account_json(meta["credential"], project=project)
@@ -960,18 +965,23 @@ def mtime_of_bq(uri, use_hash, meta):
 
 def mtime_of_gs(uri, use_hash, meta):
     """
-    gs://project/bucket/blob
+    gs://bucket/blob
     """
     import google.cloud.storage
 
-    p = _uriparse(uri)
-    project = p.netloc
-    bucket, *blob = p.path[1:].split("/")
+    puri = _uriparse(uri)
+    assert puri.scheme == "gs", puri
+    assert puri.params == "", puri
+    assert puri.query == "", puri
+    assert puri.fragment == "", puri
+
+    bucket = puri.netloc
+    blob = puri.path[1:]
     if "credential" in meta:
-        client = google.cloud.bigquery.Client.from_service_account_json(meta["credential"], project=project)
+        client = google.cloud.bigquery.Client.from_service_account_json(meta["credential"])
     else:
         # GOOGLE_APPLICATION_CREDENTIALS
-        client = google.cloud.bigquery.Client(project=project)
+        client = google.cloud.bigquery.Client()
     bucket = client.get_bucket(bucket)
     blob = bucket.get_blob("/".join(blob))
     return blob.time_created
