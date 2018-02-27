@@ -919,13 +919,13 @@ def mtime_of(uri, use_hash, meta):
 
 def mtime_of_local_file(uri, use_hash, meta):
     """
-    Inputs:
-    * uri
-    ** /path/to
-    ** file:///path/to
-    ** file://localhost/path/to
+    == Inputs
+    uri::
+        * /path/to
+        * file:///path/to
+        * file://localhost/path/to
 
-    Returns:
+    == Returns
     * min(uri_time, cache_time)
     """
     puri = _uriparse(uri)
