@@ -906,12 +906,12 @@ def _unique(xs):
 
 
 def mtime_of(uri, use_hash, meta):
-    p = _uriparse(uri)
-    if (p.scheme == "file") and (p.netloc == "localhost"):
+    puri = _uriparse(uri)
+    if (puri.scheme == "file") and (puri.netloc == "localhost"):
         return mtime_of_local_file(uri, use_hash, meta)
-    elif p.scheme == "bq":
+    elif puri.scheme == "bq":
         return mtime_of_bq(uri, use_hash, meta)
-    elif p.scheme == "gs":
+    elif puri.scheme == "gs":
         return mtime_of_gs(uri, use_hash, meta)
     else:
         raise NotImplementedError(f"mtime_of({repr(uri)}) is not supported")
@@ -1059,13 +1059,13 @@ def _hash_of_path(path, buf_size=BUF_SIZE):
 
 
 def _uriparse(uri):
-    p = urllib.parse.urlparse(uri)
-    scheme = p.scheme
-    netloc = p.netloc
-    path = p.path
-    params = p.params
-    query = p.query
-    fragment = p.fragment
+    puri = urllib.parse.urlparse(uri)
+    scheme = puri.scheme
+    netloc = puri.netloc
+    path = puri.path
+    params = puri.params
+    query = puri.query
+    fragment = puri.fragment
     if scheme == "":
         scheme = "file"
     if (scheme == "file") and (netloc == ""):
