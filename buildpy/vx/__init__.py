@@ -977,15 +977,13 @@ def mtime_of_gs(uri, use_hash, meta):
     assert puri.query == "", puri
     assert puri.fragment == "", puri
 
-    bucket = puri.netloc
-    blob = puri.path[1:]
     if "credential" in meta:
         client = google.cloud.bigquery.Client.from_service_account_json(meta["credential"])
     else:
         # GOOGLE_APPLICATION_CREDENTIALS
         client = google.cloud.bigquery.Client()
-    bucket = client.get_bucket(bucket)
-    blob = bucket.get_blob("/".join(blob))
+    bucket = client.get_bucket(puri.netloc)
+    blob = bucket.get_blob(puri.path[1:])
     # Ignoring generation
     t_uri = blob.time_created
     if not use_hash:
