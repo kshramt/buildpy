@@ -952,7 +952,7 @@ def _hash_of_path(path, buf_size=BUF_SIZE):
 
 
 def mtime_of(uri):
-    p = _urlparse(uri)
+    p = _uriparse(uri)
     if (p.scheme == "file") and (p.netloc == ""):
         return os.path.getmtime(p.path)
     elif p.scheme == "bq":
@@ -963,12 +963,13 @@ def mtime_of(uri):
         raise NotImplementedError(f"_mtime_of({repr(uri)}) is not supported")
 
 
-def mtime_of_bq(p):
+def mtime_of_bq(uri):
     """
     bq://project:dataset.table
     """
     import google.cloud.bigquery
 
+    p = _uriparse(uri)
     project, dt = p.netloc.split(":", 1)
     dataset, table = dt.split(".", 1)
     client = google.cloud.bigquery.Client(project=project)
@@ -976,19 +977,22 @@ def mtime_of_bq(p):
     return table.modified
 
 
-def mtime_of_gs(p):
+def mtime_of_gs(uri):
     """
     gs://project/bucket/blob
     """
     import google.cloud.storage
 
+    p = _uriparse(uri)
     project = p.netloc
-    bucket, blob = p.path[1:].split("/")
-    blob = google.cloud.storage.Client(project=project).get_bucket(bucket).get_blob("/".join(blob))
+    bucket, *blob = p.path[1:].split("/")
+    client = google.cloud.storage.Client(project=project)
+    bucket = client.get_bucket(bucket)
+    blob = bucket.get_blob("/".join(blob))
     return blob.time_created
 
 
-def _urlparse(uri):
+def _uriparse(uri):
     p = urllib.parse.urlparse(uri)
     scheme = p.scheme
     netloc = p.netloc
@@ -998,7 +1002,7 @@ def _urlparse(uri):
     fragment = p.fragment
     if scheme == "":
         scheme = "file"
-    return _URL(scheme=scheme, netloc=netloc, path=path, params=params, query=query, fragment=fragment)
+    return _URI(scheme=scheme, netloc=netloc, path=path, params=params, query=query, fragment=fragment)
 
 
 def _do_nothing(*_):
