@@ -2,6 +2,7 @@ import _thread
 import argparse
 import collections
 import fcntl
+import functools
 import hashlib
 import inspect
 import io
@@ -211,6 +212,7 @@ class DSL:
         self._priority_of_phony = dict()
         self._use_hash = use_hash
         self._time_of_dep_cache = _Cache()
+        self._data = dict(meta=dict())
 
     def file(self, targets, deps, desc=None, use_hash=None, serial=False, priority=_PRIORITY_DEFAULT):
         """Declare a file job.
@@ -266,6 +268,11 @@ class DSL:
                     _nil,
                 )
             _process_jobs(leaf_jobs, dependent_jobs, args.keep_going, args.jobs, args.n_serial, args.load_average, args.dry_run)
+
+    def meta(self, name, **kwargs):
+        for k, v in kwargs.items():
+            _set_unique(self._data["meta"], k, v)
+        return name
 
     def main(self, argv):
         args = _parse_argv(argv[1:])
@@ -347,7 +354,7 @@ class _PhonyJob(_Job):
 class _FileJob(_Job):
     def __init__(self, f, ts, ds, descs, use_hash, serial, time_of_dep_cache, priority):
         super().__init__(f, ts, ds, descs, priority)
-        self._time_of_dep = _hash_time_of if use_hash else _time_of
+        self._use_hash = use_hash
         self._serial = _TBool(serial)
         self._time_of_dep_cache = time_of_dep_cache
         self._hash_orig = None
@@ -387,7 +394,7 @@ class _FileJob(_Job):
         """
         Return: the last hash time.
         """
-        return self._time_of_dep_cache.get(d, lambda : self._time_of_dep(d, CACHE_DIR))
+        return self._time_of_dep_cache.get(d, functools.partial(mtime_of, d, self._use_hash))
 
 
 class _ThreadPool:
@@ -882,42 +889,102 @@ def _unique(xs):
     return ret
 
 
-def _time_of(path, cache_dir):
-    return os.path.getmtime(path)
+def mtime_of(uri, use_hash):
+    p = _uriparse(uri)
+    if (p.scheme == "file") and (p.netloc == "localhost"):
+        return mtime_of_local_file(uri, use_hash)
+    elif p.scheme == "bq":
+        return mtime_of_bq(uri, use_hash)
+    elif p.scheme == "gs":
+        return mtime_of_gs(uri, use_hash)
+    else:
+        raise NotImplementedError(f"mtime_of({repr(uri)}) is not supported")
 
 
-def _hash_time_of(path, cache_dir):
+def mtime_of_local_file(uri, use_hash):
     """
-    path cache_path -> min(path_time, cache_time)
+    Inputs:
+    * uri
+        * /path/to
+        * file:///path/to
+        * file://localhost/path/to
+
+    Returns:
+    * min(uri_time, cache_time)
     """
-    logger.debug(str(threading.get_ident()) + "\t" + path)
-    cache_path = _jp(cache_dir, "file", os.path.abspath(path))
-    t_path = os.path.getmtime(path)
+    puri = _uriparse(uri)
+    assert puri.scheme == "file", puri
+    assert puri.netloc == "localhost", puri
+    assert puri.params == "", puri
+    assert puri.query == "", puri
+    assert puri.fragment == "", puri
+    t_uri = os.path.getmtime(puri.path)
+    if not use_hash:
+        return t_uri
+    return _min_of_t_uri_and_t_cache(t_uri, functools.partial(_hash_of_path, puri.path), puri)
+
+
+def mtime_of_bq(uri, use_hash):
+    """
+    bq://project:dataset.table
+    """
+    import google.cloud.bigquery
+
+    p = _uriparse(uri)
+    project, dt = p.netloc.split(":", 1)
+    dataset, table = dt.split(".", 1)
+    client = google.cloud.bigquery.Client(project=project)
+    table = client.get_table(client.dataset(dataset).table(table))
+    return table.modified
+
+
+def mtime_of_gs(uri, use_hash):
+    """
+    gs://project/bucket/blob
+    """
+    import google.cloud.storage
+
+    p = _uriparse(uri)
+    project = p.netloc
+    bucket, *blob = p.path[1:].split("/")
+    client = google.cloud.storage.Client(project=project)
+    bucket = client.get_bucket(bucket)
+    blob = bucket.get_blob("/".join(blob))
+    return blob.time_created
+
+
+def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
+    """
+    min(uri_time, cache_time)
+    """
+    assert puri.path, puri
+    logger.debug(str(threading.get_ident()) + "\t" + str(puri))
+    cache_path = _jp(CACHE_DIR, puri.scheme, puri.netloc, os.path.abspath(puri.path))
     try:
         cache_path_stat = os.stat(cache_path)
     except Exception:
-        h_path = _hash_of_path(path)
-        _dump_hash_time_cache(cache_path, t_path, h_path)
-        return t_path
+        h_path = force_hash()
+        _dump_hash_time_cache(cache_path, t_uri, h_path)
+        return t_uri
 
     try:
         t_cache, h_cache = _load_hash_time_cache(cache_path)
     except Exception:
-        h_path = _hash_of_path(path)
-        _dump_hash_time_cache(cache_path, t_path, h_path)
-        return t_path
+        h_path = force_hash()
+        _dump_hash_time_cache(cache_path, t_uri, h_path)
+        return t_uri
 
-    if cache_path_stat.st_mtime > t_path:
+    if cache_path_stat.st_mtime > t_uri:
         return t_cache
     else:
-        h_path = _hash_of_path(path)
+        h_path = force_hash()
         if h_path == h_cache:
             t_now = time.time()
             os.utime(cache_path, (t_now, t_now))
             return t_cache
         else:
-            _dump_hash_time_cache(cache_path, t_path, h_path)
-            return t_path
+            _dump_hash_time_cache(cache_path, t_uri, h_path)
+            return t_uri
 
 
 def _dump_hash_time_cache(cache_path, t_path, h_path):
@@ -951,47 +1018,6 @@ def _hash_of_path(path, buf_size=BUF_SIZE):
     return h.hexdigest()
 
 
-def mtime_of(uri):
-    p = _uriparse(uri)
-    if (p.scheme == "file") and (p.netloc == ""):
-        return os.path.getmtime(p.path)
-    elif p.scheme == "bq":
-        return mtime_of_bq(uri)
-    elif p.scheme == "gs":
-        return mtime_of_gs(uri)
-    else:
-        raise NotImplementedError(f"_mtime_of({repr(uri)}) is not supported")
-
-
-def mtime_of_bq(uri):
-    """
-    bq://project:dataset.table
-    """
-    import google.cloud.bigquery
-
-    p = _uriparse(uri)
-    project, dt = p.netloc.split(":", 1)
-    dataset, table = dt.split(".", 1)
-    client = google.cloud.bigquery.Client(project=project)
-    table = client.get_table(client.dataset(dataset).table(table))
-    return table.modified
-
-
-def mtime_of_gs(uri):
-    """
-    gs://project/bucket/blob
-    """
-    import google.cloud.storage
-
-    p = _uriparse(uri)
-    project = p.netloc
-    bucket, *blob = p.path[1:].split("/")
-    client = google.cloud.storage.Client(project=project)
-    bucket = client.get_bucket(bucket)
-    blob = bucket.get_blob("/".join(blob))
-    return blob.time_created
-
-
 def _uriparse(uri):
     p = urllib.parse.urlparse(uri)
     scheme = p.scheme
@@ -1002,6 +1028,8 @@ def _uriparse(uri):
     fragment = p.fragment
     if scheme == "":
         scheme = "file"
+    if (scheme == "file") and (netloc == ""):
+        netloc = "localhost"
     return _URI(scheme=scheme, netloc=netloc, path=path, params=params, query=query, fragment=fragment)
 
 
