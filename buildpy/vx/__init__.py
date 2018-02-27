@@ -212,7 +212,8 @@ class DSL:
         self._priority_of_phony = dict()
         self._use_hash = use_hash
         self._time_of_dep_cache = _Cache()
-        self._data = dict(meta=dict())
+        self._data = _TDict()
+        self._data["meta"] = _TDefaultDict(_TDict)
 
     def file(self, targets, deps, desc=None, use_hash=None, serial=False, priority=_PRIORITY_DEFAULT):
         """Declare a file job.
@@ -227,7 +228,7 @@ class DSL:
         deps = _listize(deps)
 
         def _(f):
-            j = _FileJob(f, targets, deps, [desc], use_hash, serial, self._time_of_dep_cache, priority=priority)
+            j = _FileJob(f, targets, deps, [desc], use_hash, serial, self._time_of_dep_cache, priority=priority, data=self._data)
             for t in targets:
                 _set_unique(self._job_of_target, t, j)
             return _do_nothing
@@ -352,7 +353,7 @@ class _PhonyJob(_Job):
 
 
 class _FileJob(_Job):
-    def __init__(self, f, ts, ds, descs, use_hash, serial, time_of_dep_cache, priority):
+    def __init__(self, f, ts, ds, descs, use_hash, serial, time_of_dep_cache, priority, data):
         super().__init__(f, ts, ds, descs, priority)
         self._use_hash = use_hash
         self._serial = _TBool(serial)
@@ -360,6 +361,7 @@ class _FileJob(_Job):
         self._hash_orig = None
         self._hash_curr = None
         self._cache_path = None
+        self._data = data
 
     def __repr__(self):
         return f"{type(self).__name__}({repr(self.ts)}, {repr(self.ds)}, descs={repr(self.descs)}, serial={self.serial()})"
@@ -394,7 +396,7 @@ class _FileJob(_Job):
         """
         Return: the last hash time.
         """
-        return self._time_of_dep_cache.get(d, functools.partial(mtime_of, d, self._use_hash))
+        return self._time_of_dep_cache.get(d, functools.partial(mtime_of, uri=d, use_hash=self._use_hash, meta=self._data["meta"][d]))
 
 
 class _ThreadPool:
@@ -546,6 +548,20 @@ class _TDict(_TVal):
 
     def __init__(self):
         super().__init__(dict())
+
+    def __setitem__(self, k, v):
+        with self._lock:
+            self._val[k] = v
+
+    def __getitem__(self, k):
+        with self._lock:
+            return self._val[k]
+
+
+class _TDefaultDict(_TVal):
+
+    def __init__(self, default_factory):
+        super().__init__(collections.defaultdict(default_factory))
 
     def __setitem__(self, k, v):
         with self._lock:
@@ -889,19 +905,19 @@ def _unique(xs):
     return ret
 
 
-def mtime_of(uri, use_hash):
+def mtime_of(uri, use_hash, meta):
     p = _uriparse(uri)
     if (p.scheme == "file") and (p.netloc == "localhost"):
-        return mtime_of_local_file(uri, use_hash)
+        return mtime_of_local_file(uri, use_hash, meta)
     elif p.scheme == "bq":
-        return mtime_of_bq(uri, use_hash)
+        return mtime_of_bq(uri, use_hash, meta)
     elif p.scheme == "gs":
-        return mtime_of_gs(uri, use_hash)
+        return mtime_of_gs(uri, use_hash, meta)
     else:
         raise NotImplementedError(f"mtime_of({repr(uri)}) is not supported")
 
 
-def mtime_of_local_file(uri, use_hash):
+def mtime_of_local_file(uri, use_hash, meta):
     """
     Inputs:
     * uri
@@ -924,7 +940,7 @@ def mtime_of_local_file(uri, use_hash):
     return _min_of_t_uri_and_t_cache(t_uri, functools.partial(_hash_of_path, puri.path), puri)
 
 
-def mtime_of_bq(uri, use_hash):
+def mtime_of_bq(uri, use_hash, meta):
     """
     bq://project:dataset.table
     """
@@ -933,12 +949,16 @@ def mtime_of_bq(uri, use_hash):
     p = _uriparse(uri)
     project, dt = p.netloc.split(":", 1)
     dataset, table = dt.split(".", 1)
-    client = google.cloud.bigquery.Client(project=project)
+    if "credential" in meta:
+        client = google.cloud.bigquery.Client.from_service_account_json(meta["credential"], project=project)
+    else:
+        # GOOGLE_APPLICATION_CREDENTIALS
+        client = google.cloud.bigquery.Client(project=project)
     table = client.get_table(client.dataset(dataset).table(table))
     return table.modified
 
 
-def mtime_of_gs(uri, use_hash):
+def mtime_of_gs(uri, use_hash, meta):
     """
     gs://project/bucket/blob
     """
@@ -947,7 +967,11 @@ def mtime_of_gs(uri, use_hash):
     p = _uriparse(uri)
     project = p.netloc
     bucket, *blob = p.path[1:].split("/")
-    client = google.cloud.storage.Client(project=project)
+    if "credential" in meta:
+        client = google.cloud.bigquery.Client.from_service_account_json(meta["credential"], project=project)
+    else:
+        # GOOGLE_APPLICATION_CREDENTIALS
+        client = google.cloud.bigquery.Client(project=project)
     bucket = client.get_bucket(bucket)
     blob = bucket.get_blob("/".join(blob))
     return blob.time_created
