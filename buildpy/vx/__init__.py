@@ -377,7 +377,7 @@ class _FileJob(_Job):
         if self.dry_run():
             return True
         try:
-            t_ts = min(os.path.getmtime(t) for t in self.ts)
+            t_ts = min(mtime_of(uri=t, use_hash=False, meta=self._data["meta"][t]) for t in self.ts)
         except Exception:
             # Intentionally create hash caches.
             for d in self.unique_ds:
@@ -921,9 +921,9 @@ def mtime_of_local_file(uri, use_hash, meta):
     """
     Inputs:
     * uri
-        * /path/to
-        * file:///path/to
-        * file://localhost/path/to
+    ** /path/to
+    ** file:///path/to
+    ** file://localhost/path/to
 
     Returns:
     * min(uri_time, cache_time)
@@ -960,7 +960,9 @@ def mtime_of_bq(uri, use_hash, meta):
         # GOOGLE_APPLICATION_CREDENTIALS
         client = google.cloud.bigquery.Client(project=project)
     table = client.get_table(client.dataset(dataset).table(table))
-    return table.modified
+    t_uri = table.modified
+    # BigQuery does not provide a hash
+    return t_uri
 
 
 def mtime_of_gs(uri, use_hash, meta):
@@ -984,7 +986,11 @@ def mtime_of_gs(uri, use_hash, meta):
         client = google.cloud.bigquery.Client()
     bucket = client.get_bucket(bucket)
     blob = bucket.get_blob("/".join(blob))
-    return blob.time_created
+    # Ignoring generation
+    t_uri = blob.time_created
+    if not use_hash:
+        return t_uri
+    return _min_of_t_uri_and_t_cache(t_uri, lambda : blob.md5_hash, puri)
 
 
 def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
