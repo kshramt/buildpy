@@ -1,5 +1,6 @@
 import _thread
 import argparse
+import collections
 import fcntl
 import hashlib
 import inspect
@@ -16,6 +17,8 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
+
 
 __version__ = "3.6.0"
 
@@ -565,7 +568,7 @@ class _Cache:
         with k_lock:
             try:
                 return self._data[k]
-            except Exception: # This block could take time to finish
+            except Exception: # This block may require time to finish.
                 val = make_val()
                 self._data[k] = val
                 return val
@@ -659,6 +662,9 @@ class _Cons:
 
     def __contains__(self, x):
         return (self.h == x) or (x in self.t)
+
+
+_URI = collections.namedtuple("_URI", ["scheme", "netloc", "path", "params", "query", "fragment"])
 
 
 def _parse_argv(argv):
@@ -943,6 +949,56 @@ def _hash_of_path(path, buf_size=BUF_SIZE):
             else:
                 h.update(buf)
     return h.hexdigest()
+
+
+def mtime_of(uri):
+    p = _urlparse(uri)
+    if (p.scheme == "file") and (p.netloc == ""):
+        return os.path.getmtime(p.path)
+    elif p.scheme == "bq":
+        return mtime_of_bq(uri)
+    elif p.scheme == "gs":
+        return mtime_of_gs(uri)
+    else:
+        raise NotImplementedError(f"_mtime_of({repr(uri)}) is not supported")
+
+
+def mtime_of_bq(p):
+    """
+    bq://project:dataset.table
+    """
+    import google.cloud.bigquery
+
+    project, dt = p.netloc.split(":", 1)
+    dataset, table = dt.split(".", 1)
+    client = google.cloud.bigquery.Client(project=project)
+    table = client.get_table(client.dataset(dataset).table(table))
+    return table.modified
+
+
+def mtime_of_gs(p):
+    """
+    gs://project/bucket/blob
+    """
+    import google.cloud.storage
+
+    project = p.netloc
+    bucket, blob = p.path[1:].split("/")
+    blob = google.cloud.storage.Client(project=project).get_bucket(bucket).get_blob("/".join(blob))
+    return blob.time_created
+
+
+def _urlparse(uri):
+    p = urllib.parse.urlparse(uri)
+    scheme = p.scheme
+    netloc = p.netloc
+    path = p.path
+    params = p.params
+    query = p.query
+    fragment = p.fragment
+    if scheme == "":
+        scheme = "file"
+    return _URL(scheme=scheme, netloc=netloc, path=path, params=params, query=query, fragment=fragment)
 
 
 def _do_nothing(*_):

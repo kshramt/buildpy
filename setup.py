@@ -27,5 +27,9 @@ setup(
         "buildpy.v4",
         "buildpy.vx",
     ],
+    install_requires=[
+        "google-cloud-bigquery",
+        "google-cloud-storage",
+    ],
     zip_safe=True,
 )
