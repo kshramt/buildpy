@@ -114,6 +114,11 @@ dsl.main(sys.argv)
 
 ## News
 
+### v4.0.0
+
+- Support BigQuery (`"bq://project:dataset.table"`)
+- Support Google Cloud Storage (`"gs://bucket/blob"`)
+
 ### v3.6.0
 
 - Add `DSL.cd`.
