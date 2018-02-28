@@ -133,12 +133,48 @@ def _jp(path, *more):
     return os.path.normpath(os.path.sep.join((path, os.path.sep.join(more))))
 
 
-def _rm(path):
-    logger.info(path)
+def rm_local_file(uri):
+    puri = _uriparse(uri)
+    assert puri.scheme == "file", puri
+    assert puri.netloc == "localhost", puri
+    assert puri.params == "", puri
+    assert puri.query == "", puri
+    assert puri.fragment == "", puri
     try:
-        return os.remove(path)
-    except Exception:
-        return shutil.rmtree(path, ignore_errors=True)
+        return os.remove(puri.path)
+    except OSError:
+        return shutil.rmtree(puri.path, ignore_errors=True)
+
+
+def rm_bq(uri, credential):
+    """
+    bq://project:dataset.table
+    """
+    puri = _uriparse(uri)
+    assert puri.scheme == "bq", puri
+    assert puri.params == "", puri
+    assert puri.query == "", puri
+    assert puri.fragment == "", puri
+    project, dataset, table = puri.netloc.split(".", 2)
+    client = _client_of_bq(credential, project)
+    return client.delete_table(client.dataset(dataset).table(table))
+
+
+def rm_gs(uri, credential):
+    """
+    gs://bucket/blob
+    """
+    puri = _uriparse(uri)
+    assert puri.scheme == "gs", puri
+    assert puri.params == "", puri
+    assert puri.query == "", puri
+    assert puri.fragment == "", puri
+
+    client = _client_of_gs(credential)
+    bucket = client.get_bucket(puri.netloc)
+    # Ignoring generation
+    blob = bucket.get_blob(puri.path[1:])
+    return blob.delete()
 
 
 def _serialize(x):
@@ -200,7 +236,6 @@ class DSL:
     jp = staticmethod(_jp)
     mkdir = staticmethod(_mkdir)
     mv = staticmethod(shutil.move)
-    rm = staticmethod(_rm)
     cd = staticmethod(_cd)
     serialize = staticmethod(_serialize)
 
@@ -211,9 +246,9 @@ class DSL:
         self._descs_of_phony = dict()
         self._priority_of_phony = dict()
         self._use_hash = use_hash
-        self._time_of_dep_cache = _Cache()
-        self._data = _TDict()
-        self._data["meta"] = _TDefaultDict(_TDict)
+        self.time_of_dep_cache = _Cache()
+        self.data = _TDict()
+        self.data["meta"] = _TDefaultDict(_TDict)
 
     def file(self, targets, deps, desc=None, use_hash=None, serial=False, priority=_PRIORITY_DEFAULT):
         """Declare a file job.
@@ -228,7 +263,7 @@ class DSL:
         deps = _listize(deps)
 
         def _(f):
-            j = _FileJob(f, targets, deps, [desc], use_hash, serial, self._time_of_dep_cache, priority=priority, data=self._data)
+            j = _FileJob(f, targets, deps, [desc], use_hash, serial, priority=priority, dsl=self)
             for t in targets:
                 _set_unique(self._job_of_target, t, j)
             return _do_nothing
@@ -266,17 +301,31 @@ class DSL:
                     self._job_of_target,
                     self.file,
                     self._deps_of_phony,
+                    self.meta,
                     _nil,
                 )
             _process_jobs(leaf_jobs, dependent_jobs, args.keep_going, args.jobs, args.n_serial, args.load_average, args.dry_run)
 
     def meta(self, name, **kwargs):
-        _meta = self._data["meta"][name]
+        _meta = self.data["meta"][name]
         for k, v in kwargs.items():
             if (k in _meta) and (_meta[k] != v):
                 raise Err(f"Tried to overwrite meta[{repr(k)}] = {repr(_meta[k])} by {v}")
             _meta[k] = v
         return name
+
+    def rm(self, uri):
+        logger.info(uri)
+        puri = _uriparse(uri)
+        credential = self.data["meta"]["credential"] if "credential" in self.data["meta"][uri] else None
+        if (puri.scheme == "file" and puri.netloc == "localhost"):
+            return rm_local_file(uri)
+        elif puri.scheme == "bq":
+            return rm_bq(uri, credential)
+        elif puri.scheme == "gs":
+            return rm_gs(uri, credential)
+        else:
+            raise NotImplementedError(f"rm for {repr(uri)}")
 
     def main(self, argv):
         args = _parse_argv(argv[1:])
@@ -356,15 +405,14 @@ class _PhonyJob(_Job):
 
 
 class _FileJob(_Job):
-    def __init__(self, f, ts, ds, descs, use_hash, serial, time_of_dep_cache, priority, data):
+    def __init__(self, f, ts, ds, descs, use_hash, serial, priority, dsl):
         super().__init__(f, ts, ds, descs, priority)
         self._use_hash = use_hash
         self._serial = _TBool(serial)
-        self._time_of_dep_cache = time_of_dep_cache
+        self._dsl = dsl
         self._hash_orig = None
         self._hash_curr = None
         self._cache_path = None
-        self._data = data
 
     def __repr__(self):
         return f"{type(self).__name__}({repr(self.ts)}, {repr(self.ds)}, descs={repr(self.descs)}, serial={self.serial()})"
@@ -373,15 +421,21 @@ class _FileJob(_Job):
         return self._serial.val()
 
     def rm_targets(self):
+        logger.info(f"rm_targets({repr(self.ts)})")
         for t in self.ts:
-            DSL.rm(t)
+            meta = self._dsl.data["meta"][t]
+            if not (("keep" in meta) and meta["keep"]):
+                try:
+                    self._dsl.rm(t)
+                except Exception as e:
+                    pass
 
     def need_update(self):
         if self.dry_run():
             return True
         try:
-            t_ts = min(mtime_of(uri=t, use_hash=False, meta=self._data["meta"][t]) for t in self.ts)
-        except Exception:
+            t_ts = min(mtime_of(uri=t, use_hash=False, credential=self._credential_of(t)) for t in self.ts)
+        except OSError:
             # Intentionally create hash caches.
             for d in self.unique_ds:
                 self._time_of_dep_from_cache(d)
@@ -399,7 +453,11 @@ class _FileJob(_Job):
         """
         Return: the last hash time.
         """
-        return self._time_of_dep_cache.get(d, functools.partial(mtime_of, uri=d, use_hash=self._use_hash, meta=self._data["meta"][d]))
+        return self._dsl.time_of_dep_cache.get(d, functools.partial(mtime_of, uri=d, use_hash=self._use_hash, credential=self._credential_of(d)))
+
+    def _credential_of(self, uri):
+        meta = self._dsl.data["meta"][uri]
+        return meta["credential"] if "credential" in meta else None
 
 
 class _ThreadPool:
@@ -456,7 +514,7 @@ class _ThreadPool:
         while True:
             try:
                 t = self._unwaited_threads.pop()
-            except KeyError as e:
+            except KeyError:
                 break
             t.join()
 
@@ -595,14 +653,14 @@ class _Cache:
             # This block finishes instantly
             try:
                 k_lock = self._data_lock_dict[k]
-            except Exception:
+            except KeyError:
                 k_lock = threading.Lock()
                 self._data_lock_dict[k] = k_lock
 
         with k_lock:
             try:
                 return self._data[k]
-            except Exception: # This block may require time to finish.
+            except KeyError: # This block may require time to finish.
                 val = make_val()
                 self._data[k] = val
                 return val
@@ -853,6 +911,7 @@ def _make_graph(
         job_of_target,
         file,
         phonies,
+        meta,
         call_chain,
 ):
     if target in call_chain:
@@ -860,7 +919,7 @@ def _make_graph(
     if target not in job_of_target:
         assert target not in phonies
         if os.path.lexists(target):
-            @file([target], [])
+            @file([meta(target, keep=True)], [])
             def _(j):
                 raise Err(f"Must not happen: job for leaf node {target} called")
         else:
@@ -879,6 +938,7 @@ def _make_graph(
             job_of_target,
             file,
             phonies,
+            meta,
             current_call_chain,
         )
     j.unique_ds or leaf_jobs.append(j)
@@ -916,19 +976,19 @@ def _unique(xs):
     return ret
 
 
-def mtime_of(uri, use_hash, meta):
+def mtime_of(uri, use_hash, credential):
     puri = _uriparse(uri)
     if (puri.scheme == "file") and (puri.netloc == "localhost"):
-        return mtime_of_local_file(uri, use_hash, meta)
+        return mtime_of_local_file(uri, use_hash)
     elif puri.scheme == "bq":
-        return mtime_of_bq(uri, use_hash, meta)
+        return mtime_of_bq(uri, credential)
     elif puri.scheme == "gs":
-        return mtime_of_gs(uri, use_hash, meta)
+        return mtime_of_gs(uri, use_hash, credential)
     else:
         raise NotImplementedError(f"mtime_of({repr(uri)}) is not supported")
 
 
-def mtime_of_local_file(uri, use_hash, meta):
+def mtime_of_local_file(uri, use_hash):
     """
     == Inputs
     uri::
@@ -951,7 +1011,7 @@ def mtime_of_local_file(uri, use_hash, meta):
     return _min_of_t_uri_and_t_cache(t_uri, functools.partial(_hash_of_path, puri.path), puri)
 
 
-def mtime_of_bq(uri, use_hash, meta):
+def mtime_of_bq(uri, credential):
     """
     bq://project:dataset.table
     """
@@ -962,26 +1022,24 @@ def mtime_of_bq(uri, use_hash, meta):
     assert puri.fragment == "", puri
 
     project, dataset, table = puri.netloc.split(".", 2)
-    client = _client_of_bq(meta["credential"] if "credential" in meta else None, project)
+    client = _client_of_bq(credential, project)
     table = client.get_table(client.dataset(dataset).table(table))
     t_uri = table.modified.timestamp()
     # BigQuery does not provide a hash
     return t_uri
 
 
-def mtime_of_gs(uri, use_hash, meta):
+def mtime_of_gs(uri, use_hash, credential):
     """
     gs://bucket/blob
     """
-    import google.cloud.storage
-
     puri = _uriparse(uri)
     assert puri.scheme == "gs", puri
     assert puri.params == "", puri
     assert puri.query == "", puri
     assert puri.fragment == "", puri
 
-    client = _client_of_gs(meta["credential"] if "credential" in meta else None)
+    client = _client_of_gs(credential)
     bucket = client.get_bucket(puri.netloc)
     blob = bucket.get_blob(puri.path[1:])
     # Ignoring generation
@@ -1004,7 +1062,7 @@ def _client_of_gs(credential):
     import google.cloud.storage
     if credential is None:
         # GOOGLE_APPLICATION_CREDENTIALS
-        return google.cloud.storage.Client(project=project)
+        return google.cloud.storage.Client()
     else:
         return google.cloud.storage.Client.from_service_account_json(credential)
 
@@ -1018,14 +1076,14 @@ def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
     cache_path = _jp(CACHE_DIR, puri.scheme, puri.netloc, os.path.abspath(puri.path))
     try:
         cache_path_stat = os.stat(cache_path)
-    except Exception:
+    except OSError:
         h_path = force_hash()
         _dump_hash_time_cache(cache_path, t_uri, h_path)
         return t_uri
 
     try:
         t_cache, h_cache = _load_hash_time_cache(cache_path)
-    except Exception:
+    except (OSError, KeyError):
         h_path = force_hash()
         _dump_hash_time_cache(cache_path, t_uri, h_path)
         return t_uri
