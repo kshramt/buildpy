@@ -963,13 +963,12 @@ def mtime_of_bq(uri, use_hash, meta):
     assert puri.query == "", puri
     assert puri.fragment == "", puri
 
-    project, dt = puri.netloc.split(":", 1)
-    dataset, table = dt.split(".", 1)
     if "credential" in meta:
         client = google.cloud.bigquery.Client.from_service_account_json(meta["credential"], project=project)
     else:
         # GOOGLE_APPLICATION_CREDENTIALS
         client = google.cloud.bigquery.Client(project=project)
+    project, dataset, table = puri.netloc.split(".", 2)
     table = client.get_table(client.dataset(dataset).table(table))
     t_uri = table.modified.timestamp()
     # BigQuery does not provide a hash
