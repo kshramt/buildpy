@@ -118,7 +118,7 @@ dsl.main(sys.argv)
 
 ### v4.0.0
 
-- Support BigQuery (`"bq://project:dataset.table"`)
+- Support BigQuery (`"bq://project.dataset.table"`)
 - Support Google Cloud Storage (`"gs://bucket/blob"`)
 
 ### v3.6.0
