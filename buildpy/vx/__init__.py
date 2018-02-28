@@ -1013,7 +1013,7 @@ def mtime_of_local_file(uri, use_hash):
 
 def mtime_of_bq(uri, credential):
     """
-    bq://project:dataset.table
+    bq://project.dataset.table
     """
     puri = _uriparse(uri)
     assert puri.scheme == "bq", puri
