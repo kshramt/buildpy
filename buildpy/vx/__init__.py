@@ -271,8 +271,11 @@ class DSL:
             _process_jobs(leaf_jobs, dependent_jobs, args.keep_going, args.jobs, args.n_serial, args.load_average, args.dry_run)
 
     def meta(self, name, **kwargs):
+        _meta = self._data["meta"][name]
         for k, v in kwargs.items():
-            _set_unique(self._data["meta"], k, v)
+            if (k in _meta) and (_meta[k] != v):
+                raise Err(f"Tried to overwrite meta[{repr(k)}] = {repr(_meta[k])} by {v}")
+            _meta[k] = v
         return name
 
     def main(self, argv):
