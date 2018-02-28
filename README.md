@@ -12,7 +12,8 @@ It supports following features:
 - Deferred error (similar to the `--keep-going` of Make)
 - Job scheduling based on load average (similar to `--load-average` of Make)
 - DOT-formatted output a dependency graph (similar to `--prereqs` of Rake)
-- Pure Python code without external dependencies
+- Integration for BigQuery
+- Integration for Google Cloud Storage
 
 BuildPy requires Python version ≥ 3.6 and is available from [PyPI](https://pypi.python.org/pypi/buildpy):
 
