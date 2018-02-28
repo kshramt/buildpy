@@ -557,6 +557,10 @@ class _TDict(_TVal):
         with self._lock:
             return self._val[k]
 
+    def __contains__(self, k):
+        with self._lock:
+            return k in self._val
+
 
 class _TDefaultDict(_TVal):
 
@@ -570,6 +574,10 @@ class _TDefaultDict(_TVal):
     def __getitem__(self, k):
         with self._lock:
             return self._val[k]
+
+    def __contains__(self, k):
+        with self._lock:
+            return k in self._val
 
 
 class _Cache:
