@@ -971,7 +971,7 @@ def mtime_of_bq(uri, use_hash, meta):
         # GOOGLE_APPLICATION_CREDENTIALS
         client = google.cloud.bigquery.Client(project=project)
     table = client.get_table(client.dataset(dataset).table(table))
-    t_uri = table.modified
+    t_uri = table.modified.timestamp()
     # BigQuery does not provide a hash
     return t_uri
 
@@ -996,7 +996,7 @@ def mtime_of_gs(uri, use_hash, meta):
     bucket = client.get_bucket(puri.netloc)
     blob = bucket.get_blob(puri.path[1:])
     # Ignoring generation
-    t_uri = blob.time_created
+    t_uri = blob.time_created.timestamp()
     if not use_hash:
         return t_uri
     return _min_of_t_uri_and_t_cache(t_uri, lambda : blob.md5_hash, puri)
