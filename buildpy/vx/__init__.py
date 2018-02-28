@@ -955,20 +955,14 @@ def mtime_of_bq(uri, use_hash, meta):
     """
     bq://project:dataset.table
     """
-    import google.cloud.bigquery
-
     puri = _uriparse(uri)
     assert puri.scheme == "bq", puri
     assert puri.params == "", puri
     assert puri.query == "", puri
     assert puri.fragment == "", puri
 
-    if "credential" in meta:
-        client = google.cloud.bigquery.Client.from_service_account_json(meta["credential"], project=project)
-    else:
-        # GOOGLE_APPLICATION_CREDENTIALS
-        client = google.cloud.bigquery.Client(project=project)
     project, dataset, table = puri.netloc.split(".", 2)
+    client = _client_of_bq(meta["credential"] if "credential" in meta else None, project)
     table = client.get_table(client.dataset(dataset).table(table))
     t_uri = table.modified.timestamp()
     # BigQuery does not provide a hash
@@ -987,11 +981,7 @@ def mtime_of_gs(uri, use_hash, meta):
     assert puri.query == "", puri
     assert puri.fragment == "", puri
 
-    if "credential" in meta:
-        client = google.cloud.storage.Client.from_service_account_json(meta["credential"])
-    else:
-        # GOOGLE_APPLICATION_CREDENTIALS
-        client = google.cloud.storage.Client()
+    client = _client_of_gs(meta["credential"] if "credential" in meta else None)
     bucket = client.get_bucket(puri.netloc)
     blob = bucket.get_blob(puri.path[1:])
     # Ignoring generation
@@ -999,6 +989,24 @@ def mtime_of_gs(uri, use_hash, meta):
     if not use_hash:
         return t_uri
     return _min_of_t_uri_and_t_cache(t_uri, lambda : blob.md5_hash, puri)
+
+
+def _client_of_bq(credential, project):
+    import google.cloud.bigquery
+    if credential is None:
+        # GOOGLE_APPLICATION_CREDENTIALS
+        return google.cloud.bigquery.Client(project=project)
+    else:
+        return google.cloud.bigquery.Client.from_service_account_json(credential, project=project)
+
+
+def _client_of_gs(credential):
+    import google.cloud.storage
+    if credential is None:
+        # GOOGLE_APPLICATION_CREDENTIALS
+        return google.cloud.storage.Client(project=project)
+    else:
+        return google.cloud.storage.Client.from_service_account_json(credential)
 
 
 def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
