@@ -12,7 +12,7 @@ install:
 script:
   - python build.py check all $FLAGS
 env:
-  - FLAGS=-j100
+  - FLAGS=-j10
   - FLAGS=-j1
 addons:
   apt:
