@@ -1049,34 +1049,22 @@ def mtime_of_gs(uri, use_hash, credential):
     return _min_of_t_uri_and_t_cache(t_uri, lambda : blob.md5_hash, puri)
 
 
-_CLIENT_CACHE = dict()
-_CLIENT_CACHE_LOCK = threading.Lock()
-
-
 def _client_of_bq(credential, project):
-    key = ("bq", credential, project)
-    with _CLIENT_CACHE_LOCK:
-        if key not in _CLIENT_CACHE:
-            import google.cloud.bigquery
-            if credential is None:
-                # GOOGLE_APPLICATION_CREDENTIALS
-                _CLIENT_CACHE[key] = google.cloud.bigquery.Client(project=project)
-            else:
-                _CLIENT_CACHE[key] = google.cloud.bigquery.Client.from_service_account_json(credential, project=project)
-        return _CLIENT_CACHE[key]
+    import google.cloud.bigquery
+    if credential is None:
+        # GOOGLE_APPLICATION_CREDENTIALS
+        return google.cloud.bigquery.Client(project=project)
+    else:
+        return google.cloud.bigquery.Client.from_service_account_json(credential, project=project)
 
 
 def _client_of_gs(credential):
-    key = ("gs", credential)
-    with _CLIENT_CACHE_LOCK:
-        if key not in _CLIENT_CACHE:
-            import google.cloud.storage
-            if credential is None:
-                # GOOGLE_APPLICATION_CREDENTIALS
-                _CLIENT_CACHE[key] = google.cloud.storage.Client()
-            else:
-                _CLIENT_CACHE[key] = google.cloud.storage.Client.from_service_account_json(credential)
-        return _CLIENT_CACHE[key]
+    import google.cloud.storage
+    if credential is None:
+        # GOOGLE_APPLICATION_CREDENTIALS
+        return google.cloud.storage.Client()
+    else:
+        return google.cloud.storage.Client.from_service_account_json(credential)
 
 
 def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
