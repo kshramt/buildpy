@@ -1101,7 +1101,7 @@ def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
     """
     assert puri.path, puri
     logger.debug(str(threading.get_ident()) + "\t" + str(puri))
-    cache_path = _jp(CACHE_DIR, puri.scheme, puri.netloc, os.path.abspath(puri.path))
+    cache_path = DSL.jp(CACHE_DIR, puri.scheme, puri.netloc, os.path.abspath(puri.path))
     try:
         cache_path_stat = os.stat(cache_path)
     except OSError:
@@ -1131,7 +1131,7 @@ def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
 
 def _dump_hash_time_cache(cache_path, t_path, h_path):
     logger.debug(str(threading.get_ident()) + "\t" + cache_path)
-    _mkdir(_dirname(cache_path))
+    DSL.mkdir(DSL.dirname(cache_path))
     with open(cache_path, "w") as fp:
         fcntl.flock(fp, fcntl.LOCK_EX)
         json.dump(dict(t=t_path, h=h_path), fp)
