@@ -1051,10 +1051,10 @@ def mtime_of_gs(uri, use_hash, credential):
 
     client = _client_of_gs(credential)
     bucket = client.get_bucket(puri.netloc)
+    # Ignoring generation
     blob = bucket.get_blob(puri.path[1:])
     if blob is None:
         raise NotFound(uri)
-    # Ignoring generation
     t_uri = blob.time_created.timestamp()
     if not use_hash:
         return t_uri
