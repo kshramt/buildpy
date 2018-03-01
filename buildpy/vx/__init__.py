@@ -944,12 +944,21 @@ def _make_graph(
         raise Err(f"A circular dependency detected: {target} for {repr(call_chain)}")
     if target not in job_of_target:
         assert target not in phonies
-        if os.path.lexists(target):
+        ptarget = DSL.uriparse(target)
+        if (ptarget.scheme == "file") and (ptarget.netloc == "localhost"):
+            # Although this branch is not necessary since the `else` branch does the job,
+            # this branch is useful for a quick sanity check.
+            if os.path.lexists(target):
+                @file([meta(target, keep=True)], [])
+                def _(j):
+                    raise Err(f"Must not happen: the job for a leaf node {target} is called")
+            else:
+                raise Err(f"No rule to make {target}")
+        else:
+            # There is no easy (and cheap) way to check existence of a remote resource.
             @file([meta(target, keep=True)], [])
             def _(j):
-                raise Err(f"Must not happen: job for leaf node {target} called")
-        else:
-            raise Err(f"No rule to make {target}")
+                raise Err(f"No rule to make {target}")
     j = job_of_target[target]
     if j.visited:
         return
