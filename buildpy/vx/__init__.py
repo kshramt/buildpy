@@ -20,6 +20,8 @@ import threading
 import time
 import urllib.parse
 
+import google.cloud.exceptions
+
 
 __version__ = "3.6.0"
 
@@ -174,6 +176,8 @@ def rm_gs(uri, credential):
     bucket = client.get_bucket(puri.netloc)
     # Ignoring generation
     blob = bucket.get_blob(puri.path[1:])
+    if blob is None:
+        raise NotFound(uri)
     return blob.delete()
 
 
@@ -317,7 +321,8 @@ class DSL:
     def rm(self, uri):
         logger.info(uri)
         puri = _uriparse(uri)
-        credential = self.data["meta"]["credential"] if "credential" in self.data["meta"][uri] else None
+        meta = self.data["meta"][uri]
+        credential = meta["credential"] if "credential" in meta else None
         if (puri.scheme == "file" and puri.netloc == "localhost"):
             return rm_local_file(uri)
         elif puri.scheme == "bq":
@@ -335,7 +340,12 @@ class DSL:
 
 class Err(Exception):
     def __init__(self, msg=""):
-        self.msg=msg
+        self.msg = msg
+
+
+class NotFound(Err):
+    def __init__(self, msg=""):
+        self.msg = msg
 
 
 # Internal use only.
@@ -427,15 +437,15 @@ class _FileJob(_Job):
             if not (("keep" in meta) and meta["keep"]):
                 try:
                     self._dsl.rm(t)
-                except Exception as e:
-                    pass
+                except (OSError, google.cloud.exceptions.NotFound, NotFound) as e:
+                    logger.debug(f"Failed to remove {t}")
 
     def need_update(self):
         if self.dry_run():
             return True
         try:
             t_ts = min(mtime_of(uri=t, use_hash=False, credential=self._credential_of(t)) for t in self.ts)
-        except OSError:
+        except (OSError, google.cloud.exceptions.NotFound, NotFound):
             # Intentionally create hash caches.
             for d in self.unique_ds:
                 self._time_of_dep_from_cache(d)
@@ -1042,6 +1052,8 @@ def mtime_of_gs(uri, use_hash, credential):
     client = _client_of_gs(credential)
     bucket = client.get_bucket(puri.netloc)
     blob = bucket.get_blob(puri.path[1:])
+    if blob is None:
+        raise NotFound(uri)
     # Ignoring generation
     t_uri = blob.time_created.timestamp()
     if not use_hash:
