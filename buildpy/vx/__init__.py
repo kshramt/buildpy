@@ -135,8 +135,23 @@ def _jp(path, *more):
     return os.path.normpath(os.path.sep.join((path, os.path.sep.join(more))))
 
 
+def _uriparse(uri):
+    puri = urllib.parse.urlparse(uri)
+    scheme = puri.scheme
+    netloc = puri.netloc
+    path = puri.path
+    params = puri.params
+    query = puri.query
+    fragment = puri.fragment
+    if scheme == "":
+        scheme = "file"
+    if (scheme == "file") and (netloc == ""):
+        netloc = "localhost"
+    return _URI(scheme=scheme, netloc=netloc, path=path, params=params, query=query, fragment=fragment)
+
+
 def rm_local_file(uri):
-    puri = _uriparse(uri)
+    puri = DSL.uriparse(uri)
     assert puri.scheme == "file", puri
     assert puri.netloc == "localhost", puri
     assert puri.params == "", puri
@@ -152,7 +167,7 @@ def rm_bq(uri, credential):
     """
     bq://project:dataset.table
     """
-    puri = _uriparse(uri)
+    puri = DSL.uriparse(uri)
     assert puri.scheme == "bq", puri
     assert puri.params == "", puri
     assert puri.query == "", puri
@@ -166,7 +181,7 @@ def rm_gs(uri, credential):
     """
     gs://bucket/blob
     """
-    puri = _uriparse(uri)
+    puri = DSL.uriparse(uri)
     assert puri.scheme == "gs", puri
     assert puri.params == "", puri
     assert puri.query == "", puri
@@ -242,6 +257,7 @@ class DSL:
     mv = staticmethod(shutil.move)
     cd = staticmethod(_cd)
     serialize = staticmethod(_serialize)
+    uriparse = staticmethod(_uriparse)
 
     def __init__(self, use_hash=False):
         self._job_of_target = dict()
@@ -320,7 +336,7 @@ class DSL:
 
     def rm(self, uri):
         logger.info(uri)
-        puri = _uriparse(uri)
+        puri = self.uriparse(uri)
         meta = self.data["meta"][uri]
         credential = meta["credential"] if "credential" in meta else None
         if (puri.scheme == "file" and puri.netloc == "localhost"):
@@ -987,7 +1003,7 @@ def _unique(xs):
 
 
 def mtime_of(uri, use_hash, credential):
-    puri = _uriparse(uri)
+    puri = DSL.uriparse(uri)
     if (puri.scheme == "file") and (puri.netloc == "localhost"):
         return mtime_of_local_file(uri, use_hash)
     elif puri.scheme == "bq":
@@ -1009,7 +1025,7 @@ def mtime_of_local_file(uri, use_hash):
     == Returns
     * min(uri_time, cache_time)
     """
-    puri = _uriparse(uri)
+    puri = DSL.uriparse(uri)
     assert puri.scheme == "file", puri
     assert puri.netloc == "localhost", puri
     assert puri.params == "", puri
@@ -1025,7 +1041,7 @@ def mtime_of_bq(uri, credential):
     """
     bq://project.dataset.table
     """
-    puri = _uriparse(uri)
+    puri = DSL.uriparse(uri)
     assert puri.scheme == "bq", puri
     assert puri.params == "", puri
     assert puri.query == "", puri
@@ -1043,7 +1059,7 @@ def mtime_of_gs(uri, use_hash, credential):
     """
     gs://bucket/blob
     """
-    puri = _uriparse(uri)
+    puri = DSL.uriparse(uri)
     assert puri.scheme == "gs", puri
     assert puri.params == "", puri
     assert puri.query == "", puri
@@ -1142,21 +1158,6 @@ def _hash_of_path(path, buf_size=BUF_SIZE):
             else:
                 h.update(buf)
     return h.hexdigest()
-
-
-def _uriparse(uri):
-    puri = urllib.parse.urlparse(uri)
-    scheme = puri.scheme
-    netloc = puri.netloc
-    path = puri.path
-    params = puri.params
-    query = puri.query
-    fragment = puri.fragment
-    if scheme == "":
-        scheme = "file"
-    if (scheme == "file") and (netloc == ""):
-        netloc = "localhost"
-    return _URI(scheme=scheme, netloc=netloc, path=path, params=params, query=query, fragment=fragment)
 
 
 def _do_nothing(*_):
