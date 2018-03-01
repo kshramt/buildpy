@@ -147,6 +147,8 @@ def _uriparse(uri):
         scheme = "file"
     if (scheme == "file") and (netloc == ""):
         netloc = "localhost"
+    if (scheme == "file") and (netloc != "localhost"):
+        raise Err("netloc of a file URI should be localhost: {uri}")
     return _URI(scheme=scheme, netloc=netloc, path=path, params=params, query=query, fragment=fragment)
 
 
