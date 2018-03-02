@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/kshramt/buildpy.svg?branch=master)](https://travis-ci.org/kshramt/buildpy)
 
 BuildPy is a workflow engine to manage a data analysis pipeline.
-It supports following features:
+It has following features:
 
 - Parallel processing (similar to the `--jobs` of GNU Make)
 - Declaration of multiple targets for a single job
@@ -11,7 +11,7 @@ It supports following features:
 - Content-based update scheme (similar to SCons)
 - Deferred error (similar to the `--keep-going` of Make)
 - Job scheduling based on load average (similar to `--load-average` of Make)
-- DOT-formatted output a dependency graph (similar to `--prereqs` of Rake)
+- DOT-formatted output of a dependency graph (similar to `--prereqs` of Rake)
 - Integration for
     - BigQuery
     - Google Cloud Storage
