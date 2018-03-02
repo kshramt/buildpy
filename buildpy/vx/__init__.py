@@ -375,7 +375,7 @@ class LocalFile(Resource):
 
 class BigQuery(Resource):
 
-    scheme = "gs"
+    scheme = "bq"
 
     @classmethod
     def rm(cls, uri, credential):
