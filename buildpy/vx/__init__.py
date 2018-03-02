@@ -347,7 +347,7 @@ class LocalFile(Resource):
         try:
             return os.remove(puri.path)
         except OSError:
-            return shutil.rmtree(puri.path, ignore_errors=True)
+            return shutil.rmtree(puri.path)
 
     @classmethod
     def mtime_of(cls, uri, credential, use_hash):
