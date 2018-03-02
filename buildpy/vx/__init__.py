@@ -465,7 +465,7 @@ class GoogleCloudStorage(Resource):
         return _min_of_t_uri_and_t_cache(t_uri, lambda : blob.md5_hash, puri)
 
     @classmethod
-    def _client_of(cls, credential, project):
+    def _client_of(cls, credential):
         import google.cloud.storage
         if credential is None:
             # GOOGLE_APPLICATION_CREDENTIALS
