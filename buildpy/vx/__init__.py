@@ -1,4 +1,5 @@
 import _thread
+import abc
 import argparse
 import collections
 import fcntl
@@ -152,52 +153,6 @@ def _uriparse(uri):
     return _URI(scheme=scheme, netloc=netloc, path=path, params=params, query=query, fragment=fragment)
 
 
-def rm_local_file(uri):
-    puri = DSL.uriparse(uri)
-    assert puri.scheme == "file", puri
-    assert puri.netloc == "localhost", puri
-    assert puri.params == "", puri
-    assert puri.query == "", puri
-    assert puri.fragment == "", puri
-    try:
-        return os.remove(puri.path)
-    except OSError:
-        return shutil.rmtree(puri.path, ignore_errors=True)
-
-
-def rm_bq(uri, credential):
-    """
-    bq://project:dataset.table
-    """
-    puri = DSL.uriparse(uri)
-    assert puri.scheme == "bq", puri
-    assert puri.params == "", puri
-    assert puri.query == "", puri
-    assert puri.fragment == "", puri
-    project, dataset, table = puri.netloc.split(".", 2)
-    client = _client_of_bq(credential, project)
-    return client.delete_table(client.dataset(dataset).table(table))
-
-
-def rm_gs(uri, credential):
-    """
-    gs://bucket/blob
-    """
-    puri = DSL.uriparse(uri)
-    assert puri.scheme == "gs", puri
-    assert puri.params == "", puri
-    assert puri.query == "", puri
-    assert puri.fragment == "", puri
-
-    client = _client_of_gs(credential)
-    bucket = client.get_bucket(puri.netloc)
-    # Ignoring generation
-    blob = bucket.get_blob(puri.path[1:])
-    if blob is None:
-        raise NotFound(uri)
-    return blob.delete()
-
-
 def _serialize(x):
     """
     Supported data types:
@@ -341,14 +296,12 @@ class DSL:
         puri = self.uriparse(uri)
         meta = self.data["meta"][uri]
         credential = meta["credential"] if "credential" in meta else None
-        if (puri.scheme == "file" and puri.netloc == "localhost"):
-            return rm_local_file(uri)
-        elif puri.scheme == "bq":
-            return rm_bq(uri, credential)
-        elif puri.scheme == "gs":
-            return rm_gs(uri, credential)
+        if puri.scheme == "file":
+            assert puri.netloc == "localhost"
+        if puri.scheme in RESOURCE_OF_SCHEME:
+            return RESOURCE_OF_SCHEME[puri.scheme].rm(uri, credential)
         else:
-            raise NotImplementedError(f"rm for {repr(uri)}")
+            raise NotImplementedError(f"rm({repr(uri)}) is not supported")
 
     def main(self, argv):
         args = _parse_argv(argv[1:])
@@ -364,6 +317,168 @@ class Err(Exception):
 class NotFound(Err):
     def __init__(self, msg=""):
         self.msg = msg
+
+
+class Resource(abc.ABCMeta):
+
+    @classmethod
+    @abc.abstractmethod
+    def rm(cls, uri, credential):
+        pass
+
+    @classmethod
+    @abc.abstractmethod
+    def mtime_of(cls, uri, credential):
+        pass
+
+
+class LocalFile(Resource):
+
+    scheme = "file"
+
+    @classmethod
+    def rm(cls, uri, credential):
+        puri = DSL.uriparse(uri)
+        assert puri.scheme == "file", puri
+        assert puri.netloc == "localhost", puri
+        assert puri.params == "", puri
+        assert puri.query == "", puri
+        assert puri.fragment == "", puri
+        try:
+            return os.remove(puri.path)
+        except OSError:
+            return shutil.rmtree(puri.path, ignore_errors=True)
+
+    @classmethod
+    def mtime_of(cls, uri, credential, use_hash):
+        """
+        == Inputs
+        uri::
+            * /path/to
+            * file:///path/to
+            * file://localhost/path/to
+
+        == Returns
+        * min(uri_time, cache_time)
+        """
+        puri = DSL.uriparse(uri)
+        assert puri.scheme == "file", puri
+        assert puri.netloc == "localhost", puri
+        assert puri.params == "", puri
+        assert puri.query == "", puri
+        assert puri.fragment == "", puri
+        t_uri = os.path.getmtime(puri.path)
+        if not use_hash:
+            return t_uri
+        return _min_of_t_uri_and_t_cache(t_uri, functools.partial(_hash_of_path, puri.path), puri)
+
+
+class BigQuery(Resource):
+
+    scheme = "gs"
+
+    @classmethod
+    def rm(cls, uri, credential):
+        """
+        bq://project:dataset.table
+        """
+        puri = DSL.uriparse(uri)
+        assert puri.scheme == "bq", puri
+        assert puri.params == "", puri
+        assert puri.query == "", puri
+        assert puri.fragment == "", puri
+        project, dataset, table = puri.netloc.split(".", 2)
+        client = cls._client_of(credential, project)
+        return client.delete_table(client.dataset(dataset).table(table))
+
+    @classmethod
+    def mtime_of(cls, uri, credential, use_hash):
+        """
+        bq://project.dataset.table
+        """
+        puri = DSL.uriparse(uri)
+        assert puri.scheme == "bq", puri
+        assert puri.params == "", puri
+        assert puri.query == "", puri
+        assert puri.fragment == "", puri
+
+        project, dataset, table = puri.netloc.split(".", 2)
+        client = cls._client_of(credential, project)
+        table = client.get_table(client.dataset(dataset).table(table))
+        t_uri = table.modified.timestamp()
+        # BigQuery does not provide a hash
+        return t_uri
+
+    @classmethod
+    def _client_of(cls, credential, project):
+        import google.cloud.bigquery
+        if credential is None:
+            # GOOGLE_APPLICATION_CREDENTIALS
+            return google.cloud.bigquery.Client(project=project)
+        else:
+            return google.cloud.bigquery.Client.from_service_account_json(credential, project=project)
+
+
+class GoogleCloudStorage(Resource):
+
+    scheme = "gs"
+
+    @classmethod
+    def rm(cls, uri, credential):
+        """
+        gs://bucket/blob
+        """
+        puri = DSL.uriparse(uri)
+        assert puri.scheme == "gs", puri
+        assert puri.params == "", puri
+        assert puri.query == "", puri
+        assert puri.fragment == "", puri
+
+        client = cls._client_of(credential)
+        bucket = client.get_bucket(puri.netloc)
+        # Ignoring generation
+        blob = bucket.get_blob(puri.path[1:])
+        if blob is None:
+            raise NotFound(uri)
+        return blob.delete()
+
+    @classmethod
+    def mtime_of(cls, uri, credential, use_hash):
+        """
+        gs://bucket/blob
+        """
+        puri = DSL.uriparse(uri)
+        assert puri.scheme == "gs", puri
+        assert puri.params == "", puri
+        assert puri.query == "", puri
+        assert puri.fragment == "", puri
+
+        client = cls._client_of(credential)
+        bucket = client.get_bucket(puri.netloc)
+        # Ignoring generation
+        blob = bucket.get_blob(puri.path[1:])
+        if blob is None:
+            raise NotFound(uri)
+        t_uri = blob.time_created.timestamp()
+        if not use_hash:
+            return t_uri
+        return _min_of_t_uri_and_t_cache(t_uri, lambda : blob.md5_hash, puri)
+
+    @classmethod
+    def _client_of(cls, credential, project):
+        import google.cloud.storage
+        if credential is None:
+            # GOOGLE_APPLICATION_CREDENTIALS
+            return google.cloud.storage.Client()
+        else:
+            return google.cloud.storage.Client.from_service_account_json(credential)
+
+
+RESOURCE_OF_SCHEME = {
+    LocalFile.scheme: LocalFile,
+    BigQuery.scheme: BigQuery,
+    GoogleCloudStorage.scheme: GoogleCloudStorage
+}
 
 
 # Internal use only.
@@ -456,7 +571,7 @@ class _FileJob(_Job):
                 try:
                     self._dsl.rm(t)
                 except (OSError, google.cloud.exceptions.NotFound, NotFound) as e:
-                    logger.debug(f"Failed to remove {t}")
+                    logger.info(f"Failed to remove {t}")
 
     def need_update(self):
         if self.dry_run():
@@ -1015,95 +1130,12 @@ def _unique(xs):
 
 def mtime_of(uri, use_hash, credential):
     puri = DSL.uriparse(uri)
-    if (puri.scheme == "file") and (puri.netloc == "localhost"):
-        return mtime_of_local_file(uri, use_hash)
-    elif puri.scheme == "bq":
-        return mtime_of_bq(uri, credential)
-    elif puri.scheme == "gs":
-        return mtime_of_gs(uri, use_hash, credential)
+    if puri.scheme == "file":
+        assert puri.netloc == "localhost"
+    if puri.scheme in RESOURCE_OF_SCHEME:
+        return RESOURCE_OF_SCHEME[puri.scheme].mtime_of(uri, credential, use_hash)
     else:
         raise NotImplementedError(f"mtime_of({repr(uri)}) is not supported")
-
-
-def mtime_of_local_file(uri, use_hash):
-    """
-    == Inputs
-    uri::
-        * /path/to
-        * file:///path/to
-        * file://localhost/path/to
-
-    == Returns
-    * min(uri_time, cache_time)
-    """
-    puri = DSL.uriparse(uri)
-    assert puri.scheme == "file", puri
-    assert puri.netloc == "localhost", puri
-    assert puri.params == "", puri
-    assert puri.query == "", puri
-    assert puri.fragment == "", puri
-    t_uri = os.path.getmtime(puri.path)
-    if not use_hash:
-        return t_uri
-    return _min_of_t_uri_and_t_cache(t_uri, functools.partial(_hash_of_path, puri.path), puri)
-
-
-def mtime_of_bq(uri, credential):
-    """
-    bq://project.dataset.table
-    """
-    puri = DSL.uriparse(uri)
-    assert puri.scheme == "bq", puri
-    assert puri.params == "", puri
-    assert puri.query == "", puri
-    assert puri.fragment == "", puri
-
-    project, dataset, table = puri.netloc.split(".", 2)
-    client = _client_of_bq(credential, project)
-    table = client.get_table(client.dataset(dataset).table(table))
-    t_uri = table.modified.timestamp()
-    # BigQuery does not provide a hash
-    return t_uri
-
-
-def mtime_of_gs(uri, use_hash, credential):
-    """
-    gs://bucket/blob
-    """
-    puri = DSL.uriparse(uri)
-    assert puri.scheme == "gs", puri
-    assert puri.params == "", puri
-    assert puri.query == "", puri
-    assert puri.fragment == "", puri
-
-    client = _client_of_gs(credential)
-    bucket = client.get_bucket(puri.netloc)
-    # Ignoring generation
-    blob = bucket.get_blob(puri.path[1:])
-    if blob is None:
-        raise NotFound(uri)
-    t_uri = blob.time_created.timestamp()
-    if not use_hash:
-        return t_uri
-    return _min_of_t_uri_and_t_cache(t_uri, lambda : blob.md5_hash, puri)
-
-
-def _client_of_bq(credential, project):
-    import google.cloud.bigquery
-    if credential is None:
-        # GOOGLE_APPLICATION_CREDENTIALS
-        return google.cloud.bigquery.Client(project=project)
-    else:
-        return google.cloud.bigquery.Client.from_service_account_json(credential, project=project)
-
-
-def _client_of_gs(credential):
-    import google.cloud.storage
-    if credential is None:
-        # GOOGLE_APPLICATION_CREDENTIALS
-        return google.cloud.storage.Client()
-    else:
-        return google.cloud.storage.Client.from_service_account_json(credential)
 
 
 def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
@@ -1111,7 +1143,7 @@ def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
     min(uri_time, cache_time)
     """
     assert puri.path, puri
-    logger.debug(str(threading.get_ident()) + "\t" + str(puri))
+    logger.info(str(threading.get_ident()) + "\t" + str(puri))
     cache_path = DSL.jp(CACHE_DIR, puri.scheme, puri.netloc, os.path.abspath(puri.path))
     try:
         cache_path_stat = os.stat(cache_path)
@@ -1141,7 +1173,7 @@ def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
 
 
 def _dump_hash_time_cache(cache_path, t_path, h_path):
-    logger.debug(str(threading.get_ident()) + "\t" + cache_path)
+    logger.info(str(threading.get_ident()) + "\t" + cache_path)
     DSL.mkdir(DSL.dirname(cache_path))
     with open(cache_path, "w") as fp:
         fcntl.flock(fp, fcntl.LOCK_EX)
@@ -1156,7 +1188,7 @@ def _load_hash_time_cache(cache_path):
 
 
 def _hash_of_path(path, buf_size=BUF_SIZE):
-    logger.debug(path)
+    logger.info(path)
     buf = bytearray(buf_size)
     h = hashlib.sha1(b"")
     with open(path, "rb") as fp:
