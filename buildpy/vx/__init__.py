@@ -319,7 +319,7 @@ class NotFound(Err):
         self.msg = msg
 
 
-class Resource(abc.ABCMeta):
+class Resource(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
@@ -475,9 +475,9 @@ class GoogleCloudStorage(Resource):
 
 
 RESOURCE_OF_SCHEME = {
-    LocalFile.scheme: LocalFile,
-    BigQuery.scheme: BigQuery,
-    GoogleCloudStorage.scheme: GoogleCloudStorage
+    LocalFile.scheme: LocalFile(),
+    BigQuery.scheme: BigQuery(),
+    GoogleCloudStorage.scheme: GoogleCloudStorage()
 }
 
 
