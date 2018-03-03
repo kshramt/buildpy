@@ -474,13 +474,6 @@ class GoogleCloudStorage(Resource):
             return google.cloud.storage.Client.from_service_account_json(credential)
 
 
-RESOURCE_OF_SCHEME = {
-    LocalFile.scheme: LocalFile(),
-    BigQuery.scheme: BigQuery(),
-    GoogleCloudStorage.scheme: GoogleCloudStorage()
-}
-
-
 # Internal use only.
 
 
@@ -750,8 +743,10 @@ class _TVal:
 
 class _TDict(_TVal):
 
-    def __init__(self):
-        super().__init__(dict())
+    def __init__(self, d=None):
+        if d is None:
+            d = dict()
+        super().__init__(d)
 
     def __setitem__(self, k, v):
         with self._lock:
@@ -1205,3 +1200,11 @@ def _hash_of_path(path, buf_size=BUF_SIZE):
 
 def _do_nothing(*_):
     pass
+
+
+
+RESOURCE_OF_SCHEME = _TDict({
+    LocalFile.scheme: LocalFile(),
+    BigQuery.scheme: BigQuery(),
+    GoogleCloudStorage.scheme: GoogleCloudStorage()
+})
