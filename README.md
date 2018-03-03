@@ -5,16 +5,16 @@
 BuildPy is a workflow engine to manage a data analysis pipeline.
 It has following features:
 
-- Parallel processing (similar to the `--jobs` of GNU Make)
-- Declaration of multiple targets for a single job
-- Dry-run (similar to the `--dry-run` of GNU Make)
-- Content-based update scheme (similar to SCons)
-- Deferred error (similar to the `--keep-going` of Make)
-- Job scheduling based on load average (similar to `--load-average` of Make)
-- DOT-formatted output of a dependency graph (similar to `--prereqs` of Rake)
 - Integration for
     - BigQuery
     - Google Cloud Storage
+- Parallel processing (similar to the `--jobs` of GNU Make)
+- Checksum-based update scheme (similar to SCons)
+- Job scheduling based on load average (similar to `--load-average` of Make)
+- DOT-formatted output of a dependency graph (similar to `--prereqs` of Rake)
+- Deferred error (similar to the `--keep-going` of Make)
+- Dry-run (similar to the `--dry-run` of GNU Make)
+- Declaration of multiple targets for a single job
 
 BuildPy requires Python version ≥ 3.6 and is available from [PyPI](https://pypi.python.org/pypi/buildpy):
 
