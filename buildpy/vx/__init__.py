@@ -24,7 +24,7 @@ import urllib.parse
 import google.cloud.exceptions
 
 
-__version__ = "3.6.0"
+__version__ = "4.0.0"
 
 
 CACHE_DIR = os.path.join(os.getcwd(), ".cache", "buildpy")
@@ -1200,7 +1200,6 @@ def _hash_of_path(path, buf_size=BUF_SIZE):
 
 def _do_nothing(*_):
     pass
-
 
 
 RESOURCE_OF_SCHEME = _TDict({
