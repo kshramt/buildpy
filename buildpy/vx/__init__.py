@@ -376,6 +376,7 @@ class LocalFile(Resource):
 class BigQuery(Resource):
 
     scheme = "bq"
+    _tls = threading.local()
 
     @classmethod
     def rm(cls, uri, credential):
@@ -412,16 +413,23 @@ class BigQuery(Resource):
     @classmethod
     def _client_of(cls, credential, project):
         import google.cloud.bigquery
-        if credential is None:
-            # GOOGLE_APPLICATION_CREDENTIALS
-            return google.cloud.bigquery.Client(project=project)
-        else:
-            return google.cloud.bigquery.Client.from_service_account_json(credential, project=project)
+
+        if not hasattr(cls._tls, "cache"):
+            cls._tls.cache = dict()
+        key = (credential, project)
+        if key not in cls._tls.cache:
+            if credential is None:
+                # GOOGLE_APPLICATION_CREDENTIALS
+                cls._tls.cache[key] = google.cloud.bigquery.Client(project=project)
+            else:
+                cls._tls.cache[key] = google.cloud.bigquery.Client.from_service_account_json(credential, project=project)
+        return cls._tls.cache[key]
 
 
 class GoogleCloudStorage(Resource):
 
     scheme = "gs"
+    _tls = threading.local()
 
     @classmethod
     def rm(cls, uri, credential):
@@ -467,11 +475,17 @@ class GoogleCloudStorage(Resource):
     @classmethod
     def _client_of(cls, credential):
         import google.cloud.storage
-        if credential is None:
-            # GOOGLE_APPLICATION_CREDENTIALS
-            return google.cloud.storage.Client()
-        else:
-            return google.cloud.storage.Client.from_service_account_json(credential)
+
+        if not hasattr(cls._tls, "cache"):
+            cls._tls.cache = dict()
+        key = (credential,)
+        if key not in cls._tls.cache:
+            if credential is None:
+                # GOOGLE_APPLICATION_CREDENTIALS
+                cls._tls.cache[key] = google.cloud.storage.Client()
+            else:
+                cls._tls.cache[key] = google.cloud.storage.Client.from_service_account_json(credential)
+        return cls._tls.cache[key]
 
 
 # Internal use only.
