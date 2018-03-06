@@ -19,6 +19,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import urllib.parse
 
 import google.cloud.exceptions
@@ -704,10 +705,13 @@ class _ThreadPool:
                     except Exception as e:
                         got_error = True
                         logger.error(repr(j))
-                        logger.error(repr(e))
+                        fp = io.StringIO()
+                        traceback.print_exc(file=fp)
+                        e_str = fp.getvalue()
+                        logger.error(e_str)
                         j.rm_targets()
                         if self._keep_going:
-                            self._deferred_errors.put((j, e))
+                            self._deferred_errors.put((j, e_str))
                         else:
                             self._die(e)
                     self._n_running.dec()
@@ -1041,7 +1045,7 @@ def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, n_serial, load_avera
         logger.error("Following errors have thrown during the execution")
         for _ in range(deferred_errors.qsize()):
             j, e = deferred_errors.get()
-            logger.error(repr(e))
+            logger.error(e)
             logger.error(repr(j))
         raise Err("Execution failed.")
 
