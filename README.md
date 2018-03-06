@@ -116,7 +116,11 @@ dsl.main(sys.argv)
 
 ## News
 
-### v4.0.0
+### v4.2.0
+
+- Print more informative error messages.
+
+### v4.1.0
 
 - Cache clients.
 
