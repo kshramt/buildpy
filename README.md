@@ -129,6 +129,23 @@ dsl.main(sys.argv)
 - Support BigQuery (`"bq://project.dataset.table"`)
 - Support Google Cloud Storage (`"gs://bucket/blob"`)
 
+    ```py
+    import buildpy.vx
+    dsl = buildpy.vx.DSL()
+
+    pyony = dsl.phony
+    file = dsl.file
+    sh = dsl.sh
+    uriparse = dsl.uriparse
+
+    @file(["bq://myproject.mydataset.mytable"], ["gs://mybucket/myblob.csv"])
+    def _(j):
+        project, dataset, table = uriparse(j.ts[0]).netloc.split(".", 2)
+        sh(f"""
+        bq load --autodetect {project}:{dataset}.{table} {j.ds[0]}
+        """)
+    ```
+
 ### v3.6.0
 
 - Add `DSL.cd`.
