@@ -132,8 +132,8 @@ dsl.main(sys.argv)
     ```py
     import sys
 
-    import buildpy.vx
-    dsl = buildpy.vx.DSL()
+    import buildpy.v4
+    dsl = buildpy.v4.DSL()
 
     pyony = dsl.phony
     file = dsl.file
