@@ -130,6 +130,8 @@ dsl.main(sys.argv)
 - Support Google Cloud Storage (`"gs://bucket/blob"`)
 
     ```py
+    import sys
+
     import buildpy.vx
     dsl = buildpy.vx.DSL()
 
@@ -144,6 +146,11 @@ dsl.main(sys.argv)
         sh(f"""
         bq load --autodetect {project}:{dataset}.{table} {j.ds[0]}
         """)
+
+    phony("all", ["bq://myproject.mydataset.mytable"])
+
+    if __name__ == "__main__":
+        dsl.main(sys.argv)
     ```
 
 ### v3.6.0
