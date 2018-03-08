@@ -1044,8 +1044,8 @@ def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, n_serial, load_avera
     if deferred_errors.qsize() > 0:
         logger.error("Following errors have thrown during the execution")
         for _ in range(deferred_errors.qsize()):
-            j, e = deferred_errors.get()
-            logger.error(e)
+            j, e_str = deferred_errors.get()
+            logger.error(e_str)
             logger.error(repr(j))
         raise Err("Execution failed.")
 
