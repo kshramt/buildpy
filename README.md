@@ -116,6 +116,10 @@ dsl.main(sys.argv)
 
 ## News
 
+### v4.3.0
+
+- Improbe error messages.
+
 ### v4.2.0
 
 - Print more informative error messages.

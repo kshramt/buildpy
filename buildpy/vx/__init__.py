@@ -25,7 +25,7 @@ import urllib.parse
 import google.cloud.exceptions
 
 
-__version__ = "4.2.0"
+__version__ = "4.3.0"
 
 
 CACHE_DIR = os.path.join(os.getcwd(), ".cache", "buildpy")
