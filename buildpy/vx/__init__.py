@@ -385,7 +385,7 @@ class BigQuery(Resource):
         bq://project:dataset.table
         """
         puri = DSL.uriparse(uri)
-        assert puri.scheme == "bq", puri
+        assert puri.scheme == cls.scheme, puri
         assert puri.params == "", puri
         assert puri.query == "", puri
         assert puri.fragment == "", puri
@@ -399,7 +399,7 @@ class BigQuery(Resource):
         bq://project.dataset.table
         """
         puri = DSL.uriparse(uri)
-        assert puri.scheme == "bq", puri
+        assert puri.scheme == cls.scheme, puri
         assert puri.params == "", puri
         assert puri.query == "", puri
         assert puri.fragment == "", puri
@@ -438,7 +438,7 @@ class GoogleCloudStorage(Resource):
         gs://bucket/blob
         """
         puri = DSL.uriparse(uri)
-        assert puri.scheme == "gs", puri
+        assert puri.scheme == cls.scheme, puri
         assert puri.params == "", puri
         assert puri.query == "", puri
         assert puri.fragment == "", puri
@@ -457,7 +457,7 @@ class GoogleCloudStorage(Resource):
         gs://bucket/blob
         """
         puri = DSL.uriparse(uri)
-        assert puri.scheme == "gs", puri
+        assert puri.scheme == cls.scheme, puri
         assert puri.params == "", puri
         assert puri.query == "", puri
         assert puri.fragment == "", puri
