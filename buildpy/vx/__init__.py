@@ -705,15 +705,13 @@ class _ThreadPool:
                     except Exception as e:
                         got_error = True
                         logger.error(repr(j))
-                        fp = io.StringIO()
-                        traceback.print_exc(file=fp)
-                        e_str = fp.getvalue()
+                        e_str = _str_of_exception()
                         logger.error(e_str)
                         j.rm_targets()
                         if self._keep_going:
                             self._deferred_errors.put((j, e_str))
                         else:
-                            self._die(e)
+                            self._die(e_str)
                     self._n_running.dec()
                 if j.serial():
                     self._serial_queue_lock.release()
@@ -736,13 +734,12 @@ class _ThreadPool:
                 except KeyError:
                     pass
         except Exception as e: # Propagate Exception caused by a bug in buildpy code to the main thread.
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            logger.error(str(exc_type) + " " + str(fname) + " " + str(exc_tb.tb_lineno))
-            logger.error(repr(e))
-            self._die(e)
+            e_str = _str_of_exception()
+            logger.error(e_str)
+            self._die(e_str)
 
     def _die(self, e):
+        logger.critical(e)
         _thread.interrupt_main()
         sys.exit(e)
 
@@ -1214,6 +1211,12 @@ def _hash_of_path(path, buf_size=BUF_SIZE):
             else:
                 h.update(buf)
     return h.hexdigest()
+
+
+def _str_of_exception():
+    fp = io.StringIO()
+    traceback.print_exc(file=fp)
+    return fp.getvalue()
 
 
 def _do_nothing(*_):
