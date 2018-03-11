@@ -489,6 +489,61 @@ class GoogleCloudStorage(Resource):
         return cls._tls.cache[key]
 
 
+class S3(Resource):
+
+    scheme = "s3"
+    _tls = threading.local()
+
+    @classmethod
+    def rm(cls, uri, credential):
+        """
+        s3://bucket/object
+        """
+        puri = DSL.uriparse(uri)
+        assert puri.scheme == cls.scheme, puri
+        assert puri.params == "", puri
+        assert puri.query == "", puri
+        assert puri.fragment == "", puri
+
+        client = cls._client_of(credential)
+        return client.delete_object(Bucket=puri.netloc, Key=puri.path[1:])
+
+    @classmethod
+    def mtime_of(cls, uri, credential, use_hash):
+        """
+        s3://bucket/object
+        """
+        puri = DSL.uriparse(uri)
+        assert puri.scheme == cls.scheme, puri
+        assert puri.params == "", puri
+        assert puri.query == "", puri
+        assert puri.fragment == "", puri
+
+        client = cls._client_of(credential)
+        head = client.head_object(Bucket=puri.netloc, Key=puri.path[1:])
+        t_uri = head["LastModified"]
+        if not use_hash:
+            return t_uri
+        return _min_of_t_uri_and_t_cache(t_uri, lambda : head["ETag"], puri)
+
+    @classmethod
+    def _client_of(cls, credential):
+        import boto3
+
+        if not hasattr(cls._tls, "cache"):
+            cls._tls.cache = dict()
+        key = (credential,)
+        if key not in cls._tls.cache:
+            if credential is None:
+                # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+                # ~/.aws/credentials
+                cls._tls.cache[key] = boto3.session.Session().client("s3")
+            else:
+                aws_access_key_id, aws_secret_access_key = credential
+                cls._tls.cache[key] = boto3.session.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key).client("s3")
+        return cls._tls.cache[key]
+
+
 # Internal use only.
 
 
@@ -1226,5 +1281,6 @@ def _do_nothing(*_):
 RESOURCE_OF_SCHEME = _TDict({
     LocalFile.scheme: LocalFile(),
     BigQuery.scheme: BigQuery(),
-    GoogleCloudStorage.scheme: GoogleCloudStorage()
+    GoogleCloudStorage.scheme: GoogleCloudStorage(),
+    S3.scheme: S3(),
 })
