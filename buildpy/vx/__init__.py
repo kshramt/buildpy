@@ -1058,15 +1058,23 @@ def _print_dependencies(job_of_target):
 def _print_dependencies_dot(job_of_target):
     node_of_name = dict()
     i = 0
+    i_cluster = 0
     print("digraph G{")
     for j in sorted(set(job_of_target.values()), key=lambda j: j.ts):
         i += 1
+        i_cluster += 1
         action_node = "n" + str(i)
         print(action_node + "[label=\"○\"]")
         for name in j.ts:
             node, i = _node_of(name, node_of_name, i)
             print(node + "[label=" + _escape(name) + "]")
             print(node + " -> " + action_node)
+
+        print(f"subgraph cluster_{i_cluster}{{")
+        for name in j.ts:
+            print(node_of_name[name])
+        print("}")
+
         for name in j.ds:
             node, i = _node_of(name, node_of_name, i)
             print(node + "[label=" + _escape(name) + "]")
