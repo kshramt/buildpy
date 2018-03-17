@@ -118,7 +118,7 @@ dsl.main(sys.argv)
 
 ### v4.3.0
 
-- Improbe error messages.
+- Improve error messages.
 
 ### v4.2.0
 
