@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/kshramt/buildpy.svg?branch=master)](https://travis-ci.org/kshramt/buildpy)
 
-BuildPy is a workflow engine to manage a data analysis pipeline.
+BuildPy is a workflow engine to manage data analysis pipelines.
 It has following features:
 
 - Integration for
