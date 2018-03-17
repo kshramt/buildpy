@@ -183,7 +183,7 @@ dsl.main(sys.argv)
 
 ### v3.0.0
 
-- Use the JSON format to store a cache file
+- Use the JSON format to store cache files
 
 ### v2.6.0
 
