@@ -10,9 +10,9 @@ It has following features:
     - Google Cloud Storage
 - Parallel processing (similar to `--jobs` of GNU Make)
 - Checksum-based update scheme (similar to SCons)
-- Job scheduling based on load average (similar to `--load-average` of Make)
+- Job scheduling based on load average (similar to `--load-average` of GNU Make)
 - DOT-formatted output of a dependency graph (similar to `--prereqs` of Rake)
-- Deferred error (similar to `--keep-going` of Make)
+- Deferred error (similar to `--keep-going` of GNU Make)
 - Dry-run (similar to `--dry-run` of GNU Make)
 - Declaration of multiple targets for a single job
 
@@ -82,7 +82,7 @@ def _(job):
     dsl.sh(f"diff {' '.join(job.ds)} 1>| {job.ts[0]} 2>| {job.ts[1]}")
 ```
 
-Like the `task` method of Rake or `.PHONY` rule of Make, you are able to declare a job, which does not produce target files, by using `dsl.phony`.
+Like the `task` method of Rake or `.PHONY` rule of GNU Make, you are able to declare a job, which does not produce target files, by using `dsl.phony`.
 `dsl.phony` is used as follows:
 
 ```py
