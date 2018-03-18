@@ -47,7 +47,7 @@ all_files = set(
 py_files = set(path for path in all_files if path.endswith(".py"))
 buildpy_files =set(path for path in all_files if path.startswith(os.path.join("buildpy", "v")))
 vs = set(path.split(os.path.sep)[1] for path in buildpy_files)
-test_files = set(path for path in buildpy_files if re.match(os.path.join("^buildpy", "v[0-9]+", "tests"), path))
+test_files = set(path for path in buildpy_files if re.match(os.path.join("^buildpy", "v([0-9]+|x)", "tests"), path))
 
 buildpy_py_files = list(py_files.intersection(buildpy_files) - test_files)
 
