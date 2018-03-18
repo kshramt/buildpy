@@ -1,221 +1,46 @@
 import _thread
-import abc
 import argparse
-import collections
-import fcntl
 import functools
-import hashlib
-import inspect
 import io
-import itertools
-import json
 import logging
 import math
 import os
 import queue
 import shutil
-import struct
-import subprocess
 import sys
 import threading
 import time
 import traceback
-import urllib.parse
 
 import google.cloud.exceptions
+
+from ._log import logger
+from . import _convenience
+from . import _tval
+from . import exception
+from . import resource
 
 
 __version__ = "4.3.0"
 
 
-CACHE_DIR = os.path.join(os.getcwd(), ".cache", "buildpy")
-BUF_SIZE = 65536
 _PRIORITY_DEFAULT = 0
-
-logger = logging.getLogger(__name__)
-
-
-# Convenience routines to write build.py
-
-
-class _cd(object):
-    __slots__ = ["old", "new"]
-
-    def __init__(self, new):
-        self.new = new
-
-    def __call__(self, f):
-        with self as c:
-            if len(inspect.signature(f).parameters) == 1:
-                f(c)
-            else:
-                f()
-
-    def __enter__(self):
-        self.old = os.getcwd()
-        os.chdir(self.new)
-        return self
-
-    def __exit__(self, *_):
-        os.chdir(self.old)
-
-    def __repr__(self):
-        return f"#<{self.__class__.__name__} old={self.old}, new={self.new}>"
-
-
-def _sh(
-    s,
-    check=True,
-    encoding="utf-8",
-    env=None,
-    executable="/bin/bash",
-    shell=True,
-    universal_newlines=True,
-    **kwargs,
-):
-    print(s, file=sys.stderr)
-    return subprocess.run(
-        s,
-        check=check,
-        encoding=encoding,
-        env=env,
-        executable=executable,
-        shell=shell,
-        universal_newlines=universal_newlines,
-        **kwargs,
-    )
-
-
-def _let(f):
-    f()
-
-
-def _loop(*lists, tform=itertools.product):
-    """
-    >>> _loop([1, 2], ["a", "b"])(lambda x, y: print(x, y))
-    1 a
-    1 b
-    2 a
-    2 b
-    >>> _loop([(1, "a"), (2, "b")], tform=lambda x: x)(lambda x, y: print(x, y))
-    1 a
-    2 b
-    """
-    def deco(f):
-        for xs in tform(*lists):
-            f(*xs)
-    return deco
-
-
-def _mkdir(path):
-    return os.makedirs(path, exist_ok=True)
-
-
-def _dirname(path):
-    """
-    >>> _dirname("")
-    '.'
-    >>> _dirname("a")
-    '.'
-    >>> _dirname("a/b")
-    'a'
-    """
-    return os.path.dirname(path) or os.path.curdir
-
-
-def _jp(path, *more):
-    """
-    >>> _jp(".", "a")
-    'a'
-    >>> _jp("a", "b")
-    'a/b'
-    >>> _jp("a", "b", "..")
-    'a'
-    >>> _jp("a", "/b", "c")
-    'a/b/c'
-    """
-    return os.path.normpath(os.path.sep.join((path, os.path.sep.join(more))))
-
-
-def _uriparse(uri):
-    puri = urllib.parse.urlparse(uri)
-    scheme = puri.scheme
-    netloc = puri.netloc
-    path = puri.path
-    params = puri.params
-    query = puri.query
-    fragment = puri.fragment
-    if scheme == "":
-        scheme = "file"
-    if (scheme == "file") and (netloc == ""):
-        netloc = "localhost"
-    if (scheme == "file") and (netloc != "localhost"):
-        raise Err("netloc of a file URI should be localhost: {uri}")
-    return _URI(scheme=scheme, netloc=netloc, path=path, params=params, query=query, fragment=fragment)
-
-
-def _serialize(x):
-    """
-    Supported data types:
-
-    * None
-    * Integer (64 bits)
-    * Float (64 bits)
-    * String (UTF-8)
-    * List
-    * Dictionary
-    """
-
-    def _save(x, fp):
-        if x is None:
-            fp.write(b"n")
-        elif isinstance(x, float):
-            fp.write(b"f")
-            fp.write(struct.pack("<d", x))
-        elif isinstance(x, int):
-            fp.write(b"i")
-            _save_int(x, fp)
-        elif isinstance(x, str):
-            b = x.encode("utf-8")
-            fp.write(b"s")
-            _save_int(len(b), fp)
-            fp.write(b)
-        elif isinstance(x, list):
-            fp.write(b"l")
-            _save_int(len(x), fp)
-            for v in x:
-                _save(v, fp)
-        elif isinstance(x, dict):
-            fp.write(b"d")
-            _save_int(len(x), fp)
-            for k in sorted(x.keys()):
-                _save(k, fp)
-                _save(x[k], fp)
-        else:
-            raise ValueError(f"Unsupported argument {x} of type {type(x)} for `_save`")
-
-    def _save_int(x, fp):
-        return fp.write(struct.pack("<q", x))
-
-    fp = io.BytesIO()
-    _save(x, fp)
-    return fp.getvalue()
 
 
 # Main
 
 class DSL:
 
-    sh = staticmethod(_sh)
-    let = staticmethod(_let)
-    loop = staticmethod(_loop)
-    dirname = staticmethod(_dirname)
-    jp = staticmethod(_jp)
-    mkdir = staticmethod(_mkdir)
+    sh = staticmethod(_convenience.sh)
+    let = staticmethod(_convenience.let)
+    loop = staticmethod(_convenience.loop)
+    dirname = staticmethod(_convenience.dirname)
+    jp = staticmethod(_convenience.jp)
+    mkdir = staticmethod(_convenience.mkdir)
     mv = staticmethod(shutil.move)
-    cd = staticmethod(_cd)
-    serialize = staticmethod(_serialize)
-    uriparse = staticmethod(_uriparse)
+    cd = staticmethod(_convenience.cd)
+    serialize = staticmethod(_convenience.serialize)
+    uriparse = staticmethod(_convenience.uriparse)
 
     def __init__(self, use_hash=False):
         self._job_of_target = dict()
@@ -224,9 +49,9 @@ class DSL:
         self._descs_of_phony = dict()
         self._priority_of_phony = dict()
         self._use_hash = use_hash
-        self.time_of_dep_cache = _Cache()
-        self.data = _TDict()
-        self.data["meta"] = _TDefaultDict(_TDict)
+        self.time_of_dep_cache = _tval.Cache()
+        self.data = _tval.TDict()
+        self.data["meta"] = _tval.TDefaultDict(_tval.TDict)
 
     def file(self, targets, deps, desc=None, use_hash=None, serial=False, priority=_PRIORITY_DEFAULT):
         """Declare a file job.
@@ -288,7 +113,7 @@ class DSL:
         _meta = self.data["meta"][name]
         for k, v in kwargs.items():
             if (k in _meta) and (_meta[k] != v):
-                raise Err(f"Tried to overwrite meta[{repr(k)}] = {repr(_meta[k])} by {v}")
+                raise exception.Err(f"Tried to overwrite meta[{repr(k)}] = {repr(_meta[k])} by {v}")
             _meta[k] = v
         return name
 
@@ -299,8 +124,8 @@ class DSL:
         credential = meta["credential"] if "credential" in meta else None
         if puri.scheme == "file":
             assert puri.netloc == "localhost"
-        if puri.scheme in RESOURCE_OF_SCHEME:
-            return RESOURCE_OF_SCHEME[puri.scheme].rm(uri, credential)
+        if puri.scheme in resource.of_scheme:
+            return resource.of_scheme[puri.scheme].rm(uri, credential)
         else:
             raise NotImplementedError(f"rm({repr(uri)}) is not supported")
 
@@ -308,240 +133,6 @@ class DSL:
         args = _parse_argv(argv[1:])
         logger.setLevel(getattr(logging, args.log.upper()))
         self.finish(args)
-
-
-class Err(Exception):
-    def __init__(self, msg=""):
-        self.msg = msg
-
-
-class NotFound(Err):
-    def __init__(self, msg=""):
-        self.msg = msg
-
-
-class Resource(abc.ABC):
-
-    @classmethod
-    @abc.abstractmethod
-    def rm(cls, uri, credential):
-        pass
-
-    @classmethod
-    @abc.abstractmethod
-    def mtime_of(cls, uri, credential):
-        pass
-
-
-class LocalFile(Resource):
-
-    scheme = "file"
-
-    @classmethod
-    def rm(cls, uri, credential):
-        puri = DSL.uriparse(uri)
-        assert puri.scheme == "file", puri
-        assert puri.netloc == "localhost", puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
-        try:
-            return os.remove(puri.path)
-        except OSError:
-            return shutil.rmtree(puri.path)
-
-    @classmethod
-    def mtime_of(cls, uri, credential, use_hash):
-        """
-        == Inputs
-        uri::
-            * /path/to
-            * file:///path/to
-            * file://localhost/path/to
-
-        == Returns
-        * min(uri_time, cache_time)
-        """
-        puri = DSL.uriparse(uri)
-        assert puri.scheme == "file", puri
-        assert puri.netloc == "localhost", puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
-        t_uri = os.path.getmtime(puri.path)
-        if not use_hash:
-            return t_uri
-        return _min_of_t_uri_and_t_cache(t_uri, functools.partial(_hash_of_path, puri.path), puri)
-
-
-class BigQuery(Resource):
-
-    scheme = "bq"
-    _tls = threading.local()
-
-    @classmethod
-    def rm(cls, uri, credential):
-        """
-        bq://project:dataset.table
-        """
-        puri = DSL.uriparse(uri)
-        assert puri.scheme == cls.scheme, puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
-        project, dataset, table = puri.netloc.split(".", 2)
-        client = cls._client_of(credential, project)
-        return client.delete_table(client.dataset(dataset).table(table))
-
-    @classmethod
-    def mtime_of(cls, uri, credential, use_hash):
-        """
-        bq://project.dataset.table
-        """
-        puri = DSL.uriparse(uri)
-        assert puri.scheme == cls.scheme, puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
-
-        project, dataset, table = puri.netloc.split(".", 2)
-        client = cls._client_of(credential, project)
-        table = client.get_table(client.dataset(dataset).table(table))
-        t_uri = table.modified.timestamp()
-        # BigQuery does not provide a hash
-        return t_uri
-
-    @classmethod
-    def _client_of(cls, credential, project):
-        import google.cloud.bigquery
-
-        if not hasattr(cls._tls, "cache"):
-            cls._tls.cache = dict()
-        key = (credential, project)
-        if key not in cls._tls.cache:
-            if credential is None:
-                # GOOGLE_APPLICATION_CREDENTIALS
-                cls._tls.cache[key] = google.cloud.bigquery.Client(project=project)
-            else:
-                cls._tls.cache[key] = google.cloud.bigquery.Client.from_service_account_json(credential, project=project)
-        return cls._tls.cache[key]
-
-
-class GoogleCloudStorage(Resource):
-
-    scheme = "gs"
-    _tls = threading.local()
-
-    @classmethod
-    def rm(cls, uri, credential):
-        """
-        gs://bucket/blob
-        """
-        puri = DSL.uriparse(uri)
-        assert puri.scheme == cls.scheme, puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
-
-        client = cls._client_of(credential)
-        bucket = client.get_bucket(puri.netloc)
-        # Ignoring generation
-        blob = bucket.get_blob(puri.path[1:])
-        if blob is None:
-            raise NotFound(uri)
-        return blob.delete()
-
-    @classmethod
-    def mtime_of(cls, uri, credential, use_hash):
-        """
-        gs://bucket/blob
-        """
-        puri = DSL.uriparse(uri)
-        assert puri.scheme == cls.scheme, puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
-
-        client = cls._client_of(credential)
-        bucket = client.get_bucket(puri.netloc)
-        # Ignoring generation
-        blob = bucket.get_blob(puri.path[1:])
-        if blob is None:
-            raise NotFound(uri)
-        t_uri = blob.time_created.timestamp()
-        if not use_hash:
-            return t_uri
-        return _min_of_t_uri_and_t_cache(t_uri, lambda : blob.md5_hash, puri)
-
-    @classmethod
-    def _client_of(cls, credential):
-        import google.cloud.storage
-
-        if not hasattr(cls._tls, "cache"):
-            cls._tls.cache = dict()
-        key = (credential,)
-        if key not in cls._tls.cache:
-            if credential is None:
-                # GOOGLE_APPLICATION_CREDENTIALS
-                cls._tls.cache[key] = google.cloud.storage.Client()
-            else:
-                cls._tls.cache[key] = google.cloud.storage.Client.from_service_account_json(credential)
-        return cls._tls.cache[key]
-
-
-class S3(Resource):
-
-    scheme = "s3"
-    _tls = threading.local()
-
-    @classmethod
-    def rm(cls, uri, credential):
-        """
-        s3://bucket/object
-        """
-        puri = DSL.uriparse(uri)
-        assert puri.scheme == cls.scheme, puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
-
-        client = cls._client_of(credential)
-        return client.delete_object(Bucket=puri.netloc, Key=puri.path[1:])
-
-    @classmethod
-    def mtime_of(cls, uri, credential, use_hash):
-        """
-        s3://bucket/object
-        """
-        puri = DSL.uriparse(uri)
-        assert puri.scheme == cls.scheme, puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
-
-        client = cls._client_of(credential)
-        head = client.head_object(Bucket=puri.netloc, Key=puri.path[1:])
-        t_uri = head["LastModified"]
-        if not use_hash:
-            return t_uri
-        return _min_of_t_uri_and_t_cache(t_uri, lambda : head["ETag"], puri)
-
-    @classmethod
-    def _client_of(cls, credential):
-        import boto3
-
-        if not hasattr(cls._tls, "cache"):
-            cls._tls.cache = dict()
-        key = (credential,)
-        if key not in cls._tls.cache:
-            if credential is None:
-                # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
-                # ~/.aws/credentials
-                cls._tls.cache[key] = boto3.session.Session().client("s3")
-            else:
-                aws_access_key_id, aws_secret_access_key = credential
-                cls._tls.cache[key] = boto3.session.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key).client("s3")
-        return cls._tls.cache[key]
 
 
 # Internal use only.
@@ -558,7 +149,7 @@ class _Job:
         self._n_rest = len(self.unique_ds)
         self.visited = False
         self._lock = threading.Lock()
-        self._dry_run = _TBool(False)
+        self._dry_run = _tval.TBool(False)
 
     def __repr__(self):
         return f"{type(self).__name__}({repr(self.ts)}, {repr(self.ds)}, descs={repr(self.descs)})"
@@ -606,7 +197,7 @@ class _Job:
 class _PhonyJob(_Job):
     def __init__(self, f, ts, ds, descs, priority):
         if len(ts) != 1:
-            raise Err(f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}")
+            raise exception.Err(f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}")
         super().__init__(f, ts, ds, descs, priority)
 
 
@@ -614,7 +205,7 @@ class _FileJob(_Job):
     def __init__(self, f, ts, ds, descs, use_hash, serial, priority, dsl):
         super().__init__(f, ts, ds, descs, priority)
         self._use_hash = use_hash
-        self._serial = _TBool(serial)
+        self._serial = _tval.TBool(serial)
         self._dsl = dsl
         self._hash_orig = None
         self._hash_curr = None
@@ -633,7 +224,7 @@ class _FileJob(_Job):
             if not (("keep" in meta) and meta["keep"]):
                 try:
                     self._dsl.rm(t)
-                except (OSError, google.cloud.exceptions.NotFound, NotFound) as e:
+                except (OSError, google.cloud.exceptions.NotFound, exception.NotFound) as e:
                     logger.info(f"Failed to remove {t}")
 
     def need_update(self):
@@ -641,7 +232,7 @@ class _FileJob(_Job):
             return True
         try:
             t_ts = min(mtime_of(uri=t, use_hash=False, credential=self._credential_of(t)) for t in self.ts)
-        except (OSError, google.cloud.exceptions.NotFound, NotFound):
+        except (OSError, google.cloud.exceptions.NotFound, exception.NotFound):
             # Intentionally create hash caches.
             for d in self.unique_ds:
                 self._time_of_dep_from_cache(d)
@@ -676,13 +267,13 @@ class _ThreadPool:
         self._n_max = n_max
         self._load_average = load_average
         self._dry_run = dry_run
-        self._threads = _TSet()
-        self._unwaited_threads = _TSet()
+        self._threads = _tval.TSet()
+        self._unwaited_threads = _tval.TSet()
         self._threads_loc = threading.Lock()
         self._queue = queue.PriorityQueue()
         self._serial_queue = queue.PriorityQueue()
         self._serial_queue_lock = threading.Semaphore(n_serial_max)
-        self._n_running = _TInt(0)
+        self._n_running = _tval.TInt(0)
 
     def dry_run(self):
         return self._dry_run
@@ -799,150 +390,6 @@ class _ThreadPool:
         sys.exit(e)
 
 
-class _TVal:
-    __slots__ = ("_lock", "_val")
-
-    def __init__(self, val, lock=threading.Lock):
-        self._lock = lock()
-        self._val = val
-
-    def val(self):
-        with self._lock:
-            return self._val
-
-
-class _TDict(_TVal):
-
-    def __init__(self, d=None):
-        if d is None:
-            d = dict()
-        super().__init__(d)
-
-    def __setitem__(self, k, v):
-        with self._lock:
-            self._val[k] = v
-
-    def __getitem__(self, k):
-        with self._lock:
-            return self._val[k]
-
-    def __contains__(self, k):
-        with self._lock:
-            return k in self._val
-
-
-class _TDefaultDict(_TVal):
-
-    def __init__(self, default_factory):
-        super().__init__(collections.defaultdict(default_factory))
-
-    def __setitem__(self, k, v):
-        with self._lock:
-            self._val[k] = v
-
-    def __getitem__(self, k):
-        with self._lock:
-            return self._val[k]
-
-    def __contains__(self, k):
-        with self._lock:
-            return k in self._val
-
-
-class _Cache:
-
-    def __init__(self):
-        self._data_lock_dict = dict()
-        self._data_lock_dict_lock = threading.Lock()
-        self._data = _TDict()
-
-    def get(self, k, make_val):
-        with self._data_lock_dict_lock:
-            # This block finishes instantly
-            try:
-                k_lock = self._data_lock_dict[k]
-            except KeyError:
-                k_lock = threading.Lock()
-                self._data_lock_dict[k] = k_lock
-
-        with k_lock:
-            try:
-                return self._data[k]
-            except KeyError: # This block may require time to finish.
-                val = make_val()
-                self._data[k] = val
-                return val
-
-
-class _TSet(_TVal):
-    def __init__(self):
-        super().__init__(set())
-
-    def __len__(self):
-        with self._lock:
-            return len(self._val)
-
-    def add(self, x):
-        with self._lock:
-            self._val.add(x)
-
-    def remove(self, x):
-        with self._lock:
-            self._val.remove(x)
-
-    def pop(self):
-        with self._lock:
-            return self._val.pop()
-
-
-class _TStack(_TVal):
-    class Empty(Exception):
-        def __init__(self):
-            pass
-
-    def __init__(self):
-        super().__init__([])
-
-    def put(self, x):
-        with self._lock:
-            self._val.append(x)
-
-    def pop(self, block=True, timeout=-1):
-        success = self._lock.acquire(blocking=block, timeout=timeout)
-        if success:
-            if self._val:
-                ret = self._val.pop()
-            else:
-                success = False
-        self._lock.release()
-        if success:
-            return ret
-        else:
-            raise self.Empty()
-
-
-class _TInt(_TVal):
-    def __init__(self, val):
-        super().__init__(val)
-
-    def inc(self):
-        with self._lock:
-            self._val += 1
-
-    def dec(self):
-        with self._lock:
-            self._val -= 1
-
-
-class _TBool(_TVal):
-    def __init__(self, val):
-        super().__init__(val)
-
-    def set_self_or(self, x):
-        with self._lock:
-            self._val = self._val or x
-
-
 class _Nil:
     __slots__ = ()
 
@@ -962,9 +409,6 @@ class _Cons:
 
     def __contains__(self, x):
         return (self.h == x) or (x in self.t)
-
-
-_URI = collections.namedtuple("_URI", ["scheme", "netloc", "path", "params", "query", "fragment"])
 
 
 def _parse_argv(argv):
@@ -1107,7 +551,7 @@ def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, n_serial, load_avera
             j, e_str = deferred_errors.get()
             logger.error(e_str)
             logger.error(repr(j))
-        raise Err("Execution failed.")
+        raise exception.Err("Execution failed.")
 
 
 def _collect_phonies(job_of_target, deps_of_phony, f_of_phony, descs_of_phony, priority_of_phony):
@@ -1131,7 +575,7 @@ def _make_graph(
         call_chain,
 ):
     if target in call_chain:
-        raise Err(f"A circular dependency detected: {target} for {repr(call_chain)}")
+        raise exception.Err(f"A circular dependency detected: {target} for {repr(call_chain)}")
     if target not in job_of_target:
         assert target not in phonies
         ptarget = DSL.uriparse(target)
@@ -1141,14 +585,14 @@ def _make_graph(
             if os.path.lexists(target):
                 @file([meta(target, keep=True)], [])
                 def _(j):
-                    raise Err(f"Must not happen: the job for a leaf node {target} is called")
+                    raise exception.Err(f"Must not happen: the job for a leaf node {target} is called")
             else:
-                raise Err(f"No rule to make {target}")
+                raise exception.Err(f"No rule to make {target}")
         else:
             # There is no easy (and cheap) way to check existence of a remote resource.
             @file([meta(target, keep=True)], [])
             def _(j):
-                raise Err(f"No rule to make {target}")
+                raise exception.Err(f"No rule to make {target}")
     j = job_of_target[target]
     if j.visited:
         return
@@ -1186,7 +630,7 @@ def _listize(x):
 
 def _set_unique(d, k, v):
     if k in d:
-        raise Err(f"{repr(k)} in {repr(d)}")
+        raise exception.Err(f"{repr(k)} in {repr(d)}")
     d[k] = v
     return d
 
@@ -1205,75 +649,10 @@ def mtime_of(uri, use_hash, credential):
     puri = DSL.uriparse(uri)
     if puri.scheme == "file":
         assert puri.netloc == "localhost"
-    if puri.scheme in RESOURCE_OF_SCHEME:
-        return RESOURCE_OF_SCHEME[puri.scheme].mtime_of(uri, credential, use_hash)
+    if puri.scheme in resource.of_scheme:
+        return resource.of_scheme[puri.scheme].mtime_of(uri, credential, use_hash)
     else:
         raise NotImplementedError(f"mtime_of({repr(uri)}) is not supported")
-
-
-def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
-    """
-    min(uri_time, cache_time)
-    """
-    assert puri.path, puri
-    logger.info(str(threading.get_ident()) + "\t" + str(puri))
-    cache_path = DSL.jp(CACHE_DIR, puri.scheme, puri.netloc, os.path.abspath(puri.path))
-    try:
-        cache_path_stat = os.stat(cache_path)
-    except OSError:
-        h_path = force_hash()
-        _dump_hash_time_cache(cache_path, t_uri, h_path)
-        return t_uri
-
-    try:
-        t_cache, h_cache = _load_hash_time_cache(cache_path)
-    except (OSError, KeyError):
-        h_path = force_hash()
-        _dump_hash_time_cache(cache_path, t_uri, h_path)
-        return t_uri
-
-    if cache_path_stat.st_mtime > t_uri:
-        return t_cache
-    else:
-        h_path = force_hash()
-        if h_path == h_cache:
-            t_now = time.time()
-            os.utime(cache_path, (t_now, t_now))
-            return t_cache
-        else:
-            _dump_hash_time_cache(cache_path, t_uri, h_path)
-            return t_uri
-
-
-def _dump_hash_time_cache(cache_path, t_path, h_path):
-    logger.info(str(threading.get_ident()) + "\t" + cache_path)
-    DSL.mkdir(DSL.dirname(cache_path))
-    with open(cache_path, "w") as fp:
-        fcntl.flock(fp, fcntl.LOCK_EX)
-        json.dump(dict(t=t_path, h=h_path), fp)
-
-
-def _load_hash_time_cache(cache_path):
-    with open(cache_path, "r") as fp:
-        fcntl.flock(fp, fcntl.LOCK_EX)
-        data = json.load(fp)
-    return data["t"], data["h"]
-
-
-def _hash_of_path(path, buf_size=BUF_SIZE):
-    logger.info(path)
-    buf = bytearray(buf_size)
-    h = hashlib.sha1(b"")
-    with open(path, "rb") as fp:
-        while True:
-            n = fp.readinto(buf)
-            if n <= 0:
-                break
-            elif n < buf_size:
-                h.update(buf[:n])
-            else:
-                h.update(buf)
-    return h.hexdigest()
 
 
 def _str_of_exception():
@@ -1284,11 +663,3 @@ def _str_of_exception():
 
 def _do_nothing(*_):
     pass
-
-
-RESOURCE_OF_SCHEME = _TDict({
-    LocalFile.scheme: LocalFile(),
-    BigQuery.scheme: BigQuery(),
-    GoogleCloudStorage.scheme: GoogleCloudStorage(),
-    S3.scheme: S3(),
-})
