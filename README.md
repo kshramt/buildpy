@@ -8,12 +8,12 @@ It has following features:
 - Integration for
     - BigQuery
     - Google Cloud Storage
-- Parallel processing (similar to the `--jobs` of GNU Make)
+- Parallel processing (similar to `--jobs` of GNU Make)
 - Checksum-based update scheme (similar to SCons)
 - Job scheduling based on load average (similar to `--load-average` of Make)
 - DOT-formatted output of a dependency graph (similar to `--prereqs` of Rake)
-- Deferred error (similar to the `--keep-going` of Make)
-- Dry-run (similar to the `--dry-run` of GNU Make)
+- Deferred error (similar to `--keep-going` of Make)
+- Dry-run (similar to `--dry-run` of GNU Make)
 - Declaration of multiple targets for a single job
 
 BuildPy requires Python version ≥ 3.6 and is available from [PyPI](https://pypi.python.org/pypi/buildpy):
