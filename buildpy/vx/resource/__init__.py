@@ -15,7 +15,7 @@ from .. import exception
 
 
 BUF_SIZE = 65536
-CACHE_DIR = _convenience.jp(os.getcwd(), ".cache", "buildpy")
+CACHE_DIR = _convenience.jp(os.getcwd(), ".buildpy")
 
 
 class Resource(abc.ABC):
