@@ -25,6 +25,7 @@ setup(
         "buildpy.v2",
         "buildpy.v3",
         "buildpy.v4",
+        "buildpy.v5",
         "buildpy.vx",
     ],
     install_requires=[
