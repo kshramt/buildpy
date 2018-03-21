@@ -3,7 +3,6 @@ import inspect
 import io
 import itertools
 import os
-import struct
 import subprocess
 import sys
 import urllib
@@ -135,44 +134,58 @@ def serialize(x):
     Supported data types:
 
     * None
-    * Integer (64 bits)
-    * Float (64 bits)
-    * String (UTF-8)
+    * Integer
+    * Float
+    * String
     * List
     * Dictionary
+
+    == Examples
+
+    >>> serialize(1)
+    'i1_'
+    >>> serialize(-10)
+    'i-10_'
+    >>> serialize(1.0)
+    'fi20_0x1.0000000000000p+0'
+    >>> serialize(dict(a=[1, 2.0, [3.0, {4: [-5.0, -0.0], -9e301: "直列化"}], None]))
+    'di1_si1_ali4_i1_fi20_0x1.0000000000000p+1li2_fi20_0x1.8000000000000p+1di2_fi24_-0x1.0cc7a8fa052b1p+1003si3_直列化i4_li2_fi21_-0x1.4000000000000p+2fi9_-0x0.0p+0n'
     """
 
-    def _save(x, fp):
+    fp = io.StringIO()
+
+    def _save(x):
         if x is None:
-            fp.write(b"n")
+            fp.write("n")
         elif isinstance(x, float):
-            fp.write(b"f")
-            fp.write(struct.pack("<d", x))
+            fp.write("f")
+            h = x.hex()
+            _save_int(len(h))
+            fp.write(h)
         elif isinstance(x, int):
-            fp.write(b"i")
-            _save_int(x, fp)
+            _save_int(x)
         elif isinstance(x, str):
-            b = x.encode("utf-8")
-            fp.write(b"s")
-            _save_int(len(b), fp)
-            fp.write(b)
+            fp.write("s")
+            _save_int(len(x))
+            fp.write(x)
         elif isinstance(x, list):
-            fp.write(b"l")
-            _save_int(len(x), fp)
+            fp.write("l")
+            _save_int(len(x))
             for v in x:
-                _save(v, fp)
+                _save(v)
         elif isinstance(x, dict):
-            fp.write(b"d")
-            _save_int(len(x), fp)
+            fp.write("d")
+            _save_int(len(x))
             for k in sorted(x.keys()):
-                _save(k, fp)
-                _save(x[k], fp)
+                _save(k)
+                _save(x[k])
         else:
             raise ValueError(f"Unsupported argument {x} of type {type(x)} for `_save`")
 
-    def _save_int(x, fp):
-        return fp.write(struct.pack("<q", x))
+    def _save_int(x):
+        fp.write("i")
+        fp.write(str(x))
+        fp.write("_")
 
-    fp = io.BytesIO()
-    _save(x, fp)
+    _save(x)
     return fp.getvalue()

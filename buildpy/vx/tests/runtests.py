@@ -9,9 +9,17 @@ import buildpy.vx
 
 
 def main(argv):
-    result = doctest.testmod(buildpy.vx)
-    if result.failed > 0:
-        exit(1)
+    for mod in [
+            buildpy.vx,
+            buildpy.vx._convenience,
+            buildpy.vx._log,
+            buildpy.vx._tval,
+            buildpy.vx.exception,
+            buildpy.vx.resource,
+    ]:
+        result = doctest.testmod(mod)
+        if result.failed > 0:
+            exit(mod)
 
     @buildpy.vx.DSL.let
     def _():
@@ -24,19 +32,19 @@ def main(argv):
     @buildpy.vx.DSL.let
     def _():
         s = buildpy.vx.DSL.serialize(None)
-        assert s == b"n"
+        assert s == "n", s
         s = buildpy.vx.DSL.serialize(1)
-        assert s == b"i\x01\x00\x00\x00\x00\x00\x00\x00", s
+        assert s == "i1_", s
         s = buildpy.vx.DSL.serialize(2)
-        assert s == b"i\x02\x00\x00\x00\x00\x00\x00\x00", s
+        assert s == "i2_", s
         s = buildpy.vx.DSL.serialize(1.234e89)
-        assert s == b"f\xf1Tz\x8a\x1b\x04oR", s
+        assert s == "fi22_0x1.f041b8a7a54f1p+295", s
         s = buildpy.vx.DSL.serialize([1.234e89])
-        assert s == b"l\x01\x00\x00\x00\x00\x00\x00\x00f\xf1Tz\x8a\x1b\x04oR", s
+        assert s == "li1_fi22_0x1.f041b8a7a54f1p+295", s
         s = buildpy.vx.DSL.serialize([1.234e89, 32])
-        assert s == b"l\x02\x00\x00\x00\x00\x00\x00\x00f\xf1Tz\x8a\x1b\x04oRi \x00\x00\x00\x00\x00\x00\x00", s
+        assert s == "li2_fi22_0x1.f041b8a7a54f1p+295i32_", s
         s = buildpy.vx.DSL.serialize({1: 1.234e89, 99: ["b", 4], 3.2: {"p": 9, "r": -9831.98773}})
-        assert s == b"d\x03\x00\x00\x00\x00\x00\x00\x00i\x01\x00\x00\x00\x00\x00\x00\x00f\xf1Tz\x8a\x1b\x04oRf\x9a\x99\x99\x99\x99\x99\t@d\x02\x00\x00\x00\x00\x00\x00\x00s\x01\x00\x00\x00\x00\x00\x00\x00pi\t\x00\x00\x00\x00\x00\x00\x00s\x01\x00\x00\x00\x00\x00\x00\x00rf\xa4\xc7\xefm\xfe3\xc3\xc0ic\x00\x00\x00\x00\x00\x00\x00l\x02\x00\x00\x00\x00\x00\x00\x00s\x01\x00\x00\x00\x00\x00\x00\x00bi\x04\x00\x00\x00\x00\x00\x00\x00", s
+        assert s == "di3_i1_fi22_0x1.f041b8a7a54f1p+295fi20_0x1.999999999999ap+1di2_si1_pi9_si1_rfi22_-0x1.333fe6defc7a4p+13i99_li2_si1_bi4_", s
         assert buildpy.vx.DSL.serialize(dict(a=1, b=2, c=3)) == buildpy.vx.DSL.serialize(dict(c=3, b=2, a=1)) == buildpy.vx.DSL.serialize(dict(b=2, a=1, c=3))
 
     @buildpy.vx.DSL.let
