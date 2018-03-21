@@ -45,8 +45,7 @@ class DSL:
     def __init__(self, use_hash=False):
         self._use_hash = use_hash
         self.time_of_dep_cache = _tval.Cache()
-        self.data = _tval.TDict()
-        self.data["meta"] = _tval.TDefaultDict(_tval.TDict)
+        self.metadata = _tval.TDefaultDict(_tval.TDict)
 
         self._job_of_target = dict()
         self._job_of_target_lock = threading.RLock()
@@ -110,17 +109,17 @@ class DSL:
             _process_jobs(leaf_jobs, dependent_jobs, args.keep_going, args.jobs, args.n_serial, args.load_average, args.dry_run)
 
     def meta(self, name, **kwargs):
-        _meta = self.data["meta"][name]
+        _meta = self.metadata[name]
         for k, v in kwargs.items():
             if (k in _meta) and (_meta[k] != v):
-                raise exception.Err(f"Tried to overwrite meta[{repr(k)}] = {repr(_meta[k])} by {v}")
+                raise exception.Err(f"Tried to overwrite metadata[{repr(k)}] = {repr(_meta[k])} by {v}")
             _meta[k] = v
         return name
 
     def rm(self, uri):
         logger.info(uri)
         puri = self.uriparse(uri)
-        meta = self.data["meta"][uri]
+        meta = self.metadata[uri]
         credential = meta["credential"] if "credential" in meta else None
         if puri.scheme == "file":
             assert puri.netloc == "localhost"
@@ -241,7 +240,7 @@ class _FileJob(_Job):
     def rm_targets(self):
         logger.info(f"rm_targets({repr(self.ts)})")
         for t in self.ts:
-            meta = self._dsl.data["meta"][t]
+            meta = self._dsl.metadata[t]
             if not (("keep" in meta) and meta["keep"]):
                 try:
                     self._dsl.rm(t)
@@ -274,7 +273,7 @@ class _FileJob(_Job):
         return self._dsl.time_of_dep_cache.get(d, functools.partial(mtime_of, uri=d, use_hash=self._use_hash, credential=self._credential_of(d)))
 
     def _credential_of(self, uri):
-        meta = self._dsl.data["meta"][uri]
+        meta = self._dsl.metadata[uri]
         return meta["credential"] if "credential" in meta else None
 
 
