@@ -176,7 +176,7 @@ def serialize(x):
         elif isinstance(x, dict):
             fp.write("d")
             _save_int(len(x))
-            for k in sorted(x.keys()):
+            for k in sorted(x.keys(), key=serialize):
                 _save(k)
                 _save(x[k])
         else:
