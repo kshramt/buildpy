@@ -43,9 +43,10 @@ class DSL:
     uriparse = staticmethod(_convenience.uriparse)
 
     def __init__(self, use_hash=False):
+        self._resource_of_uri = dict()
+        self._resource_of_uri_lock = threading.RLock()
         self._use_hash = use_hash
         self.time_of_dep_cache = _tval.Cache()
-        self.metadata = _tval.TDefaultDict(_tval.TDict)
 
         self._job_of_target = dict()
         self._job_of_target_lock = threading.RLock()
@@ -62,6 +63,7 @@ class DSL:
 
         def _(f):
             j = _FileJob(f, targets, deps, [desc], use_hash, serial, priority=priority, dsl=self)
+            _update_resource_of_uri(self._resource_of_uri, targets, deps, j, self._resource_of_uri_lock)
             for t in targets:
                 _set_unique(self._job_of_target, t, j)
             return _do_nothing
@@ -78,7 +80,7 @@ class DSL:
             else:
                 j = _PhonyJob(None, [target], deps, [] if desc is None else [desc], priority)
                 self._job_of_target[target] = j
-
+            _update_resource_of_uri(self._resource_of_uri, [target], deps, j, self._resource_of_uri_lock)
             def _(f):
                 j.f = f
                 return _do_nothing
@@ -108,18 +110,16 @@ class DSL:
                 )
             _process_jobs(leaf_jobs, dependent_jobs, args.keep_going, args.jobs, args.n_serial, args.load_average, args.dry_run)
 
-    def meta(self, name, **kwargs):
-        _meta = self.metadata[name]
+    def meta(self, uri, **kwargs):
+        r = self._resource_of_uri[uri]
         for k, v in kwargs.items():
-            if (k in _meta) and (_meta[k] != v):
-                raise exception.Err(f"Tried to overwrite metadata[{repr(k)}] = {repr(_meta[k])} by {v}")
-            _meta[k] = v
-        return name
+            r[k] = v
+        return uri
 
     def rm(self, uri):
         logger.info(uri)
         puri = self.uriparse(uri)
-        meta = self.metadata[uri]
+        meta = self._resource_of_uri[uri]
         credential = meta["credential"] if "credential" in meta else None
         if puri.scheme == "file":
             assert puri.netloc == "localhost"
@@ -135,6 +135,55 @@ class DSL:
 
 
 # Internal use only.
+
+
+class _Resource(object):
+
+    def __init__(self, uri, tjs, djs):
+        self.lock = threading.RLock()
+        self.uri = uri
+        self._tjs = tjs
+        self._djs = djs
+        self._check_djs()
+        self.meta = dict()
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.uri})"
+
+    @property
+    def tjs(self):
+        return self._tjs
+
+    @property
+    def djs(self):
+        return self._djs
+
+    def add_djs(self, dj):
+        with self.lock:
+            self._djs.add(dj)
+        self._check_djs()
+
+    def add_tjs(self, tj):
+        with self.lock:
+            self._tjs.add(tj)
+
+    def __getitem__(self, k):
+        with self.lock:
+            return self.meta[k]
+
+    def __setitem__(self, k, v):
+        with self.lock:
+            if (k in self.meta) and (self.meta[k] != v):
+                raise exception.Err(f"Tried to overwrite {self}[{repr(k)}] = {self.meta[k]} by {v}")
+            self.meta[k] = v
+
+    def __contains__(self, v):
+        with self.lock:
+            return v in self.meta
+
+    def _check_djs(self):
+        with self.lock:
+            assert len(self._djs) <= 1, self._djs
 
 
 class _Job:
@@ -240,7 +289,7 @@ class _FileJob(_Job):
     def rm_targets(self):
         logger.info(f"rm_targets({repr(self.ts)})")
         for t in self.ts:
-            meta = self._dsl.metadata[t]
+            meta = self._dsl._resource_of_uri[t]
             if not (("keep" in meta) and meta["keep"]):
                 try:
                     self._dsl.rm(t)
@@ -273,7 +322,7 @@ class _FileJob(_Job):
         return self._dsl.time_of_dep_cache.get(d, functools.partial(mtime_of, uri=d, use_hash=self._use_hash, credential=self._credential_of(d)))
 
     def _credential_of(self, uri):
-        meta = self._dsl.metadata[uri]
+        meta = self._dsl._resource_of_uri[uri]
         return meta["credential"] if "credential" in meta else None
 
 
@@ -651,6 +700,24 @@ def mtime_of(uri, use_hash, credential):
         return resource.of_scheme[puri.scheme].mtime_of(uri, credential, use_hash)
     else:
         raise NotImplementedError(f"mtime_of({repr(uri)}) is not supported")
+
+
+def _update_resource_of_uri(resource_of_uri, targets, deps, j, lock):
+    with lock:
+        for target in targets:
+            if target in resource_of_uri:
+                r = resource_of_uri[target]
+                r.add_djs(j)
+            else:
+                r = _Resource(target, set(), set([j]))
+                resource_of_uri[target] = r
+        for dep in deps:
+            if dep in resource_of_uri:
+                r = resource_of_uri[dep]
+                r.add_tjs(j)
+            else:
+                r = _Resource(dep, set([j]), set())
+                resource_of_uri[dep] = r
 
 
 def _str_of_exception():
