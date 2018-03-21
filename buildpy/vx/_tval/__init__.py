@@ -5,7 +5,7 @@ import threading
 class TVal:
     __slots__ = ("_lock", "_val")
 
-    def __init__(self, val, lock=threading.Lock):
+    def __init__(self, val, lock=threading.RLock):
         self._lock = lock()
         self._val = val
 
