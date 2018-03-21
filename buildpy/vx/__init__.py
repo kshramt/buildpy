@@ -43,15 +43,13 @@ class DSL:
     uriparse = staticmethod(_convenience.uriparse)
 
     def __init__(self, use_hash=False):
-        self._job_of_target = dict()
-        self._f_of_phony = dict()
-        self._deps_of_phony = dict()
-        self._descs_of_phony = dict()
-        self._priority_of_phony = dict()
         self._use_hash = use_hash
         self.time_of_dep_cache = _tval.Cache()
         self.data = _tval.TDict()
         self.data["meta"] = _tval.TDefaultDict(_tval.TDict)
+
+        self._job_of_target = dict()
+        self._job_of_target_lock = threading.RLock()
 
     def file(self, targets, deps, desc=None, use_hash=None, serial=False, priority=_PRIORITY_DEFAULT):
         """Declare a file job.
@@ -71,20 +69,25 @@ class DSL:
         return _
 
     def phony(self, target, deps, desc=None, priority=None):
-        self._deps_of_phony.setdefault(target, []).extend(deps)
-        self._descs_of_phony.setdefault(target, []).append(desc)
-        if priority is not None:
-            self._priority_of_phony[target] = priority
+        with self._job_of_target_lock:
+            if target in self._job_of_target:
+                j = self._job_of_target[target]
+                j.ds.extend(deps)
+                if desc is not None:
+                    j.descs.append(desc)
+                j.priority = priority
+            else:
+                j = _PhonyJob(None, [target], deps, [] if desc is None else [desc], priority)
+                self._job_of_target[target] = j
 
-        def _(f):
-            _set_unique(self._f_of_phony, target, f)
-            return _do_nothing
-        return _
+            def _(f):
+                j.f = f
+                return _do_nothing
+            return _
 
     def finish(self, args):
         assert args.jobs > 0
         assert args.load_average > 0
-        _collect_phonies(self._job_of_target, self._deps_of_phony, self._f_of_phony, self._descs_of_phony, priority_of_phony=self._priority_of_phony)
         if args.descriptions:
             _print_descriptions(self._job_of_target)
         elif args.dependencies:
@@ -101,7 +104,6 @@ class DSL:
                     target,
                     self._job_of_target,
                     self.file,
-                    self._deps_of_phony,
                     self.meta,
                     _nil,
                 )
@@ -138,15 +140,14 @@ class DSL:
 
 class _Job:
     def __init__(self, f, ts, ds, descs, priority):
-        self.f = f
-        self.descs = [desc for desc in descs if desc is not None]
-        self.priority = priority
-        self.unique_ds = _unique(ds)
-        self._n_rest = len(self.unique_ds)
+        self._f = f
         self.ts = ts
         self.ds = ds
+        self.descs = descs
+        self._priority = priority
+        self._ds_made = set()
         self.visited = False
-        self._lock = threading.Lock()
+        self.lock = threading.RLock()
         self._dry_run = _tval.TBool(False)
 
     def __repr__(self):
@@ -154,6 +155,32 @@ class _Job:
 
     def __lt__(self, other):
         return self.priority < other.priority
+
+    @property
+    def f(self):
+        return _coalesce(self._f, _do_nothing)
+
+    @f.setter
+    def f(self, f):
+        if self._f is None:
+            self._f = f
+        elif self._f == f:
+            pass
+        else:
+            raise exception.Err(f"{self._f} for {self} is overwritten by {f}")
+
+    @property
+    def priority(self):
+        return _coalesce(self._priority, _PRIORITY_DEFAULT)
+
+    @priority.setter
+    def priority(self, priority):
+        if priority is not None:
+            self._priority = priority
+
+    @property
+    def unique_ds(self):
+        return _unique(self.ds)
 
     def execute(self):
         self.f(self)
@@ -164,17 +191,13 @@ class _Job:
     def need_update(self):
         return True
 
-    def n_rest(self):
-        with self._lock:
-            return self._n_rest
+    def ds_rest(self):
+        # todo: scalability issue
+        return set(self.ds) - self._ds_made
 
-    def dec_n_rest(self):
-        with self._lock:
-            self._n_rest -= 1
-
-    def set_n_rest(self, x):
-        with self._lock:
-            self._n_rest = x
+    def mark_as_made(self, d):
+        with self.lock:
+            self._ds_made.add(d)
 
     def serial(self):
         return False
@@ -328,7 +351,7 @@ class _ThreadPool:
                         j = self._queue.get(block=True, timeout=0.01)
                     except queue.Empty:
                         break
-                assert j.n_rest() == 0
+                assert not j.ds_rest()
                 got_error = False
                 need_update = j.need_update()
                 if need_update:
@@ -359,14 +382,13 @@ class _ThreadPool:
                     self._n_running.dec()
                 if j.serial():
                     self._serial_queue_lock.release()
-                j.set_n_rest(-1)
                 if not got_error:
                     for t in j.ts:
                         # top targets does not have dependent jobs
                         for dj in self._dependent_jobs.get(t, ()):
-                            dj.dec_n_rest()
+                            dj.mark_as_made(t)
                             dj.dry_run_set_self_or(need_update and self.dry_run())
-                            if dj.n_rest() == 0:
+                            if not dj.ds_rest():
                                 self.push_job(dj)
             with self._threads_loc:
                 try:
@@ -552,28 +574,18 @@ def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, n_serial, load_avera
         raise exception.Err("Execution failed.")
 
 
-def _collect_phonies(job_of_target, deps_of_phony, f_of_phony, descs_of_phony, priority_of_phony):
-    for target, deps in deps_of_phony.items():
-        _set_unique(
-            job_of_target, target,
-            _PhonyJob(f_of_phony.get(target, _do_nothing), [target], deps, descs_of_phony[target], priority=priority_of_phony.get(target, _PRIORITY_DEFAULT)),
-        )
-
-
 def _make_graph(
         dependent_jobs,
         leaf_jobs,
         target,
         job_of_target,
         file,
-        phonies,
         meta,
         call_chain,
 ):
     if target in call_chain:
         raise exception.Err(f"A circular dependency detected: {target} for {repr(call_chain)}")
     if target not in job_of_target:
-        assert target not in phonies
         ptarget = DSL.uriparse(target)
         if (ptarget.scheme == "file") and (ptarget.netloc == "localhost"):
             # Although this branch is not necessary since the `else` branch does the job,
@@ -602,7 +614,6 @@ def _make_graph(
             dep,
             job_of_target,
             file,
-            phonies,
             meta,
             current_call_chain,
         )
@@ -647,6 +658,10 @@ def _str_of_exception():
     fp = io.StringIO()
     traceback.print_exc(file=fp)
     return fp.getvalue()
+
+
+def _coalesce(x, default):
+    return default if x is None else x
 
 
 def _do_nothing(*_):
