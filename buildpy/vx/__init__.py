@@ -148,7 +148,7 @@ class _Resource(object):
         self.meta = dict()
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.uri})"
+        return f"{self.__class__.__name__}({repr(self.uri)}).meta = {self.meta}"
 
     @property
     def tjs(self):
@@ -645,7 +645,7 @@ def _make_graph(
             else:
                 raise exception.Err(f"No rule to make {target}")
         else:
-            # There is no easy (and cheap) way to check existence of a remote resource.
+            # There is no easy (and cheap) way to check the existence of remote resources.
             @file([meta(target, keep=True)], [])
             def _(j):
                 raise exception.Err(f"No rule to make {target}")
