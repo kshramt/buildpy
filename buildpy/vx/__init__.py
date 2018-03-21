@@ -62,8 +62,6 @@ class DSL:
         """
         if use_hash is None:
             use_hash = self._use_hash
-        targets = _listize(targets)
-        deps = _listize(deps)
 
         def _(f):
             j = _FileJob(f, targets, deps, [desc], use_hash, serial, priority=priority, dsl=self)
@@ -73,7 +71,7 @@ class DSL:
         return _
 
     def phony(self, target, deps, desc=None, priority=None):
-        self._deps_of_phony.setdefault(target, []).extend(_listize(deps))
+        self._deps_of_phony.setdefault(target, []).extend(deps)
         self._descs_of_phony.setdefault(target, []).append(desc)
         if priority is not None:
             self._priority_of_phony[target] = priority
@@ -141,12 +139,12 @@ class DSL:
 class _Job:
     def __init__(self, f, ts, ds, descs, priority):
         self.f = f
-        self.ts = _listize(ts)
-        self.ds = _listize(ds)
         self.descs = [desc for desc in descs if desc is not None]
         self.priority = priority
         self.unique_ds = _unique(ds)
         self._n_rest = len(self.unique_ds)
+        self.ts = ts
+        self.ds = ds
         self.visited = False
         self._lock = threading.Lock()
         self._dry_run = _tval.TBool(False)
@@ -556,11 +554,9 @@ def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, n_serial, load_avera
 
 def _collect_phonies(job_of_target, deps_of_phony, f_of_phony, descs_of_phony, priority_of_phony):
     for target, deps in deps_of_phony.items():
-        targets = _listize(target)
-        deps = _listize(deps)
         _set_unique(
             job_of_target, target,
-            _PhonyJob(f_of_phony.get(target, _do_nothing), targets, deps, descs_of_phony[target], priority=priority_of_phony.get(target, _PRIORITY_DEFAULT)),
+            _PhonyJob(f_of_phony.get(target, _do_nothing), [target], deps, descs_of_phony[target], priority=priority_of_phony.get(target, _PRIORITY_DEFAULT)),
         )
 
 
@@ -618,14 +614,6 @@ def _key_to_sort_unique_ds(dep, job_of_target):
         return job_of_target[dep].priority
     except KeyError:
         return math.inf
-
-
-def _listize(x):
-    if isinstance(x, list):
-        return x
-    if isinstance(x, str):
-        return [x]
-    raise NotImplementedError(f"_listize({repr(x)}: {type(x)})")
 
 
 def _set_unique(d, k, v):

@@ -47,15 +47,15 @@ rm = dsl.rm
 
 phony("all", "a", desc="Default target")
 
-@file("a", "b", desc="Test 2")
+@file(["a"], ["b"], desc="Test 2")
 def _(j):
     sh("touch " + " ".join(j.ts))
 
-@file("b", ["c", "d"], desc="Test 1")
+@file(["b"], ["c", "d"], desc="Test 1")
 def _(j):
     sh("touch " + " ".join(j.ts))
 
-@file("d", "e")
+@file(["d"], ["e"])
 def _(j):
     sh("touch " + " ".join(j.ts))
 
