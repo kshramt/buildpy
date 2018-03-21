@@ -30,6 +30,11 @@ class Resource(abc.ABC):
     def mtime_of(cls, uri, credential):
         pass
 
+    @classmethod
+    @abc.abstractmethod
+    def _check_uri(cls, uri):
+        pass
+
 
 class LocalFile(Resource):
 
@@ -37,12 +42,7 @@ class LocalFile(Resource):
 
     @classmethod
     def rm(cls, uri, credential):
-        puri = _convenience.uriparse(uri)
-        assert puri.scheme == "file", puri
-        assert puri.netloc == "localhost", puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
+        puri = cls._check_uri(uri)
         try:
             return os.remove(puri.path)
         except OSError:
@@ -51,25 +51,29 @@ class LocalFile(Resource):
     @classmethod
     def mtime_of(cls, uri, credential, use_hash):
         """
-        == Inputs
-        uri::
-            * /path/to
-            * file:///path/to
-            * file://localhost/path/to
-
         == Returns
         * min(uri_time, cache_time)
         """
         puri = _convenience.uriparse(uri)
-        assert puri.scheme == "file", puri
-        assert puri.netloc == "localhost", puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
         t_uri = os.path.getmtime(puri.path)
         if not use_hash:
             return t_uri
         return _min_of_t_uri_and_t_cache(t_uri, functools.partial(_hash_of_path, puri.path), puri)
+
+    @classmethod
+    def _check_uri(cls, uri):
+        """
+        * /path/to
+        * file:///path/to
+        * file://localhost/path/to
+        """
+        puri = _convenience.uriparse(uri)
+        assert puri.scheme == cls.scheme, puri
+        assert puri.netloc == "localhost", puri
+        assert puri.params == "", puri
+        assert puri.query == "", puri
+        assert puri.fragment == "", puri
+        return puri
 
 
 class BigQuery(Resource):
@@ -79,29 +83,14 @@ class BigQuery(Resource):
 
     @classmethod
     def rm(cls, uri, credential):
-        """
-        bq://project:dataset.table
-        """
-        puri = _convenience.uriparse(uri)
-        assert puri.scheme == cls.scheme, puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
+        puri = cls._check_uri(uri)
         project, dataset, table = puri.netloc.split(".", 2)
         client = cls._client_of(credential, project)
         return client.delete_table(client.dataset(dataset).table(table))
 
     @classmethod
     def mtime_of(cls, uri, credential, use_hash):
-        """
-        bq://project.dataset.table
-        """
-        puri = _convenience.uriparse(uri)
-        assert puri.scheme == cls.scheme, puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
-
+        puri = cls._check_uri(uri)
         project, dataset, table = puri.netloc.split(".", 2)
         client = cls._client_of(credential, project)
         table = client.get_table(client.dataset(dataset).table(table))
@@ -124,6 +113,18 @@ class BigQuery(Resource):
                 cls._tls.cache[key] = google.cloud.bigquery.Client.from_service_account_json(credential, project=project)
         return cls._tls.cache[key]
 
+    @classmethod
+    def _check_uri(cls, uri):
+        """
+        bq://project.dataset.table
+        """
+        puri = _convenience.uriparse(uri)
+        assert puri.scheme == cls.scheme, puri
+        assert puri.params == "", puri
+        assert puri.query == "", puri
+        assert puri.fragment == "", puri
+        return puri
+
 
 class GoogleCloudStorage(Resource):
 
@@ -132,15 +133,7 @@ class GoogleCloudStorage(Resource):
 
     @classmethod
     def rm(cls, uri, credential):
-        """
-        gs://bucket/blob
-        """
-        puri = _convenience.uriparse(uri)
-        assert puri.scheme == cls.scheme, puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
-
+        puri = cls._check_uri(uri)
         client = cls._client_of(credential)
         bucket = client.get_bucket(puri.netloc)
         # Ignoring generation
@@ -151,15 +144,7 @@ class GoogleCloudStorage(Resource):
 
     @classmethod
     def mtime_of(cls, uri, credential, use_hash):
-        """
-        gs://bucket/blob
-        """
-        puri = _convenience.uriparse(uri)
-        assert puri.scheme == cls.scheme, puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
-
+        puri = cls._check_uri(uri)
         client = cls._client_of(credential)
         bucket = client.get_bucket(puri.netloc)
         # Ignoring generation
@@ -186,6 +171,18 @@ class GoogleCloudStorage(Resource):
                 cls._tls.cache[key] = google.cloud.storage.Client.from_service_account_json(credential)
         return cls._tls.cache[key]
 
+    @classmethod
+    def _check_uri(cls, uri):
+        """
+        gs://bucket/blob
+        """
+        puri = _convenience.uriparse(uri)
+        assert puri.scheme == cls.scheme, puri
+        assert puri.params == "", puri
+        assert puri.query == "", puri
+        assert puri.fragment == "", puri
+        return puri
+
 
 class S3(Resource):
 
@@ -194,29 +191,13 @@ class S3(Resource):
 
     @classmethod
     def rm(cls, uri, credential):
-        """
-        s3://bucket/object
-        """
-        puri = _convenience.uriparse(uri)
-        assert puri.scheme == cls.scheme, puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
-
+        puri = cls._check_uri(uri)
         client = cls._client_of(credential)
         return client.delete_object(Bucket=puri.netloc, Key=puri.path[1:])
 
     @classmethod
     def mtime_of(cls, uri, credential, use_hash):
-        """
-        s3://bucket/object
-        """
-        puri = _convenience.uriparse(uri)
-        assert puri.scheme == cls.scheme, puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
-
+        puri = cls._check_uri(uri)
         client = cls._client_of(credential)
         head = client.head_object(Bucket=puri.netloc, Key=puri.path[1:])
         t_uri = head["LastModified"]
@@ -240,6 +221,18 @@ class S3(Resource):
                 aws_access_key_id, aws_secret_access_key = credential
                 cls._tls.cache[key] = boto3.session.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key).client("s3")
         return cls._tls.cache[key]
+
+    @classmethod
+    def _check_uri(cls, uri):
+        """
+        s3://bucket/object
+        """
+        puri = _convenience.uriparse(uri)
+        assert puri.scheme == cls.scheme, puri
+        assert puri.params == "", puri
+        assert puri.query == "", puri
+        assert puri.fragment == "", puri
+        return puri
 
 
 of_scheme = _tval.TDict({
