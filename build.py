@@ -24,6 +24,7 @@ logger = _setup_logger()
 os.environ["SHELL"] = "/bin/bash"
 os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
+os.environ["PYTHONPATH"] = os.getcwd() + ((":" + os.environ["PYTHONPATH"]) if "PYTHONPATH" in os.environ else "")
 
 python = os.environ["PYTHON"]
 
