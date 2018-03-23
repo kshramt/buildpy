@@ -45,11 +45,9 @@ class DSL:
     def __init__(self, use_hash=False):
         self._resource_of_uri = dict()
         self._resource_of_uri_lock = threading.RLock()
+        self._job_of_target = _JobOfTarget(self._resource_of_uri, self._resource_of_uri_lock)
         self._use_hash = use_hash
         self.time_of_dep_cache = _tval.Cache()
-
-        self._job_of_target = dict()
-        self._job_of_target_lock = threading.RLock()
 
     def file(self, targets, deps, desc=None, use_hash=None, serial=False, priority=_PRIORITY_DEFAULT):
         """Declare a file job.
@@ -64,13 +62,11 @@ class DSL:
         def _(f):
             j = _FileJob(f, targets, deps, [desc], use_hash, serial, priority=priority, dsl=self)
             _update_resource_of_uri(self._resource_of_uri, targets, deps, j, self._resource_of_uri_lock)
-            for t in targets:
-                _set_unique(self._job_of_target, t, j)
             return _do_nothing
         return _
 
     def phony(self, target, deps, desc=None, priority=None):
-        with self._job_of_target_lock:
+        with self._resource_of_uri_lock:
             if target in self._job_of_target:
                 j = self._job_of_target[target]
                 j.ds.extend(deps)
@@ -79,7 +75,6 @@ class DSL:
                 j.priority = priority
             else:
                 j = _PhonyJob(None, [target], deps, [] if desc is None else [desc], priority)
-                self._job_of_target[target] = j
             _update_resource_of_uri(self._resource_of_uri, [target], deps, j, self._resource_of_uri_lock)
             def _(f):
                 j.f = f
@@ -137,14 +132,40 @@ class DSL:
 # Internal use only.
 
 
+class _JobOfTarget(object):
+
+    def __init__(self, resource_of_uri, lock):
+        self._lock = lock
+        self._resource_of_uri = resource_of_uri
+
+    def __getitem__(self, k):
+        with self._lock:
+            ret = self._resource_of_uri[k].dj
+            if ret is None:
+                raise KeyError(k)
+            return ret
+
+    def __contains__(self, k):
+        with self._lock:
+            return (k in self._resource_of_uri) and (self._resource_of_uri[k].dj is not None)
+
+    def keys(self):
+        for k in self._resource_of_uri.keys():
+            if k in self:
+                yield k
+
+    def values(self):
+        for k in self.keys():
+            yield self[k]
+
+
 class _Resource(object):
 
-    def __init__(self, uri, tjs, djs):
+    def __init__(self, uri, tjs, dj):
         self.lock = threading.RLock()
         self.uri = uri
         self._tjs = tjs
-        self._djs = djs
-        self._check_djs()
+        self._dj = dj
         self.meta = dict()
 
     def __repr__(self):
@@ -155,13 +176,12 @@ class _Resource(object):
         return self._tjs
 
     @property
-    def djs(self):
-        return self._djs
+    def dj(self):
+        return self._dj
 
-    def add_djs(self, dj):
+    def set_dj(self, dj):
         with self.lock:
-            self._djs.add(dj)
-        self._check_djs()
+            self._dj = dj
 
     def add_tjs(self, tj):
         with self.lock:
@@ -180,10 +200,6 @@ class _Resource(object):
     def __contains__(self, v):
         with self.lock:
             return v in self.meta
-
-    def _check_djs(self):
-        with self.lock:
-            assert len(self._djs) <= 1, self._djs
 
 
 class _Job:
@@ -707,16 +723,16 @@ def _update_resource_of_uri(resource_of_uri, targets, deps, j, lock):
         for target in targets:
             if target in resource_of_uri:
                 r = resource_of_uri[target]
-                r.add_djs(j)
+                r.set_dj(j)
             else:
-                r = _Resource(target, set(), set([j]))
+                r = _Resource(target, set(), j)
                 resource_of_uri[target] = r
         for dep in deps:
             if dep in resource_of_uri:
                 r = resource_of_uri[dep]
                 r.add_tjs(j)
             else:
-                r = _Resource(dep, set([j]), set())
+                r = _Resource(dep, set([j]), None)
                 resource_of_uri[dep] = r
 
 
