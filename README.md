@@ -15,6 +15,7 @@ It has following features:
 - Deferred error (similar to `--keep-going` of GNU Make)
 - Dry-run (similar to `--dry-run` of GNU Make)
 - Declaration of multiple targets for a single job
+- Versioned API (`buildpy.v1`, `buildpy.v2`, ...)
 
 BuildPy requires Python version ≥ 3.6 and is available from [PyPI](https://pypi.python.org/pypi/buildpy):
 
