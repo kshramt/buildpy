@@ -179,7 +179,8 @@ class _Resource(object):
     def dj(self):
         return self._dj
 
-    def set_dj(self, dj):
+    @dj.setter
+    def dj(self, dj):
         with self.lock:
             self._dj = dj
 
@@ -723,7 +724,7 @@ def _update_resource_of_uri(resource_of_uri, targets, deps, j, lock):
         for target in targets:
             if target in resource_of_uri:
                 r = resource_of_uri[target]
-                r.set_dj(j)
+                r.dj = j
             else:
                 r = _Resource(target, set(), j)
                 resource_of_uri[target] = r
