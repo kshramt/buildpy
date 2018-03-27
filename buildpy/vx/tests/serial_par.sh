@@ -40,7 +40,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(use_hash=True)
+dsl = buildpy.vx.DSL(sys.argv, use_hash=True)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
@@ -73,7 +73,7 @@ def _(x):
 
 if __name__ == '__main__':
     t1 = datetime.datetime.now()
-    dsl.main(sys.argv)
+    dsl.run()
     t2 = datetime.datetime.now()
     dt = (t2 - t1)/datetime.timedelta(seconds=1)
     assert 2.5 < dt < 3.5, dt

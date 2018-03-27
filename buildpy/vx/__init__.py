@@ -42,12 +42,22 @@ class DSL:
     serialize = staticmethod(_convenience.serialize)
     uriparse = staticmethod(_convenience.uriparse)
 
-    def __init__(self, use_hash=False):
-        self._resource_of_uri = dict()
-        self._resource_of_uri_lock = threading.RLock()
-        self._job_of_target = _JobOfTarget(self._resource_of_uri, self._resource_of_uri_lock)
+    def __init__(self, argv, use_hash=False):
+        self.args = _parse_argv(argv[1:])
+        assert self.args.jobs > 0
+        assert self.args.load_average > 0
+
+        self.resource_of_uri = dict()
+        self.resource_of_uri_lock = threading.RLock()
+        self._job_of_target = _JobOfTarget(self.resource_of_uri, self.resource_of_uri_lock)
         self._use_hash = use_hash
         self.time_of_dep_cache = _tval.Cache()
+
+        self.thread_pool = _ThreadPool(
+            self.resource_of_uri,
+            self.args.keep_going, self.args.jobs,
+            self.args.n_serial, self.args.load_average, self.args.dry_run,
+        )
 
     def file(self, targets, deps, desc=None, use_hash=None, serial=False, priority=_PRIORITY_DEFAULT):
         """Declare a file job.
@@ -61,12 +71,12 @@ class DSL:
 
         def _(f):
             j = _FileJob(f, targets, deps, [desc], use_hash, serial, priority=priority, dsl=self)
-            _update_resource_of_uri(self._resource_of_uri, targets, deps, j, self._resource_of_uri_lock)
+            self._update_resource_of_uri(targets, deps, j)
             return _do_nothing
         return _
 
     def phony(self, target, deps, desc=None, priority=None):
-        with self._resource_of_uri_lock:
+        with self.resource_of_uri_lock:
             if target in self._job_of_target:
                 j = self._job_of_target[target]
                 j.ds.extend(deps)
@@ -74,39 +84,37 @@ class DSL:
                     j.descs.append(desc)
                 j.priority = priority
             else:
-                j = _PhonyJob(None, [target], deps, [] if desc is None else [desc], priority)
-            _update_resource_of_uri(self._resource_of_uri, [target], deps, j, self._resource_of_uri_lock)
+                j = _PhonyJob(None, [target], deps, [] if desc is None else [desc], priority, dsl=self)
+            self._update_resource_of_uri([target], deps, j)
             def _(f):
                 j.f = f
                 return _do_nothing
             return _
 
-    def finish(self, args):
-        assert args.jobs > 0
-        assert args.load_average > 0
-        if args.descriptions:
+    def run(self):
+        logger.setLevel(getattr(logging, self.args.log.upper()))
+
+        if self.args.descriptions:
             _print_descriptions(self._job_of_target)
-        elif args.dependencies:
+        elif self.args.dependencies:
             _print_dependencies(self._job_of_target)
-        elif args.dependencies_dot:
+        elif self.args.dependencies_dot:
             _print_dependencies_dot(self._job_of_target)
         else:
-            dependent_jobs = dict()
-            leaf_jobs = []
-            for target in args.targets:
-                _make_graph(
-                    dependent_jobs,
-                    leaf_jobs,
-                    target,
-                    self._job_of_target,
-                    self.file,
-                    self.meta,
-                    _nil,
-                )
-            _process_jobs(leaf_jobs, dependent_jobs, args.keep_going, args.jobs, args.n_serial, args.load_average, args.dry_run)
+            for target in self.args.targets:
+                logger.debug(f"run {target}")
+                self.resource_of_uri[target].invoke()
+            self.thread_pool.wait()
+            if self.thread_pool.deferred_errors.qsize() > 0:
+                logger.error("Following errors have thrown during the execution")
+                for _ in range(self.thread_pool.deferred_errors.qsize()):
+                    j, e_str = self.thread_pool.deferred_errors.get()
+                    logger.error(e_str)
+                    logger.error(repr(j))
+                raise exception.Err("Execution failed.")
 
     def meta(self, uri, **kwargs):
-        r = self._resource_of_uri[uri]
+        r = self.resource_of_uri[uri]
         for k, v in kwargs.items():
             r[k] = v
         return uri
@@ -114,7 +122,7 @@ class DSL:
     def rm(self, uri):
         logger.info(uri)
         puri = self.uriparse(uri)
-        meta = self._resource_of_uri[uri]
+        meta = self.resource_of_uri[uri]
         credential = meta["credential"] if "credential" in meta else None
         if puri.scheme == "file":
             assert puri.netloc == "localhost"
@@ -123,11 +131,22 @@ class DSL:
         else:
             raise NotImplementedError(f"rm({repr(uri)}) is not supported")
 
-    def main(self, argv):
-        args = _parse_argv(argv[1:])
-        logger.setLevel(getattr(logging, args.log.upper()))
-        self.finish(args)
-
+    def _update_resource_of_uri(self, targets, deps, j):
+        with self.resource_of_uri_lock:
+            for target in targets:
+                if target in self.resource_of_uri:
+                    r = self.resource_of_uri[target]
+                    r.dj = j
+                else:
+                    r = _Resource(target, set(), j, dsl=self)
+                    self.resource_of_uri[target] = r
+            for dep in deps:
+                if dep in self.resource_of_uri:
+                    r = self.resource_of_uri[dep]
+                    r.add_tjs(j)
+                else:
+                    r = _Resource(dep, set([j]), None, dsl=self)
+                    self.resource_of_uri[dep] = r
 
 # Internal use only.
 
@@ -135,18 +154,18 @@ class DSL:
 class _JobOfTarget(object):
 
     def __init__(self, resource_of_uri, lock):
-        self._lock = lock
+        self.lock = lock
         self._resource_of_uri = resource_of_uri
 
     def __getitem__(self, k):
-        with self._lock:
+        with self.lock:
             ret = self._resource_of_uri[k].dj
             if ret is None:
                 raise KeyError(k)
             return ret
 
     def __contains__(self, k):
-        with self._lock:
+        with self.lock:
             return (k in self._resource_of_uri) and (self._resource_of_uri[k].dj is not None)
 
     def keys(self):
@@ -159,17 +178,47 @@ class _JobOfTarget(object):
             yield self[k]
 
 
+class _Nil:
+    __slots__ = ()
+
+    def __contains__(self, x):
+        return False
+
+    def __repr__(self):
+        return "nil"
+
+
+_nil = _Nil()
+
+
+class _Cons:
+    __slots__ = ("h", "t")
+
+    def __init__(self, h, t):
+        self.h = h
+        self.t = t
+
+    def __contains__(self, x):
+        return (self.h == x) or (x in self.t)
+
+    def __repr__(self):
+        return f"({repr(self.h)} . {repr(self.t)})"
+
+
 class _Resource(object):
 
-    def __init__(self, uri, tjs, dj):
+    def __init__(self, uri, tjs, dj, dsl):
         self.lock = threading.RLock()
         self.uri = uri
         self._tjs = tjs
         self._dj = dj
+        self.dsl = dsl
         self.meta = dict()
+        self.invoked = False
+        self.kicked = False
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({repr(self.uri)}).meta = {self.meta}"
+        return f"{self.__class__.__name__}({repr(self.uri)}).meta={self.meta}"
 
     @property
     def tjs(self):
@@ -182,6 +231,7 @@ class _Resource(object):
     @dj.setter
     def dj(self, dj):
         with self.lock:
+            assert (self.dj is None) or self.dj == dj, (self, self.dj)
             self._dj = dj
 
     def add_tjs(self, tj):
@@ -202,17 +252,68 @@ class _Resource(object):
         with self.lock:
             return v in self.meta
 
+    def invoke(self, call_chain=_nil):
+        logger.debug(f"invoke {self} with {call_chain}")
+        if self in call_chain:
+            raise exception.Err(f"A circular dependency detected: {self.uri} for {repr(call_chain)}")
+        with self.lock:
+            if self.kicked:
+                logger.debug("is kicked")
+                self.invoked = True
+                for tj in self.tjs:
+                    tj.kick()
+                return
+            if self.invoked:
+                logger.debug("is invoked")
+                return
+            if self.dj is None:
+                puri = DSL.uriparse(self.uri)
+                if (puri.scheme == "file") and (puri.netloc == "localhost"):
+                    # Although this branch is not necessary since the `else` branch does the job,
+                    # this branch is useful for a quick sanity check.
+                    if os.path.lexists(puri.path):
+                        @self.dsl.file([self.dsl.meta(self.uri, keep=True)], [])
+                        def _(j):
+                            raise exception.Err(f"Must not happen: the job for a leaf node {self.uri} is called")
+                    else:
+                        raise exception.Err(f"No rule to make {self.uri}")
+                else:
+                    # There is no easy (and cheap) way to check the existence of remote resources.
+                    @self.dsl.file([self.dsl.meta(self.uri, keep=True)], [])
+                    def _(j):
+                        raise exception.Err(f"No rule to make {self.uri}")
+            if self.dj.ds:
+                logger.debug(f"invoke ds of {self.dj}")
+                for d in self.dj.ds:
+                    self.dsl.resource_of_uri[d].invoke(_Cons(self, call_chain))
+            else:
+                logger.debug(f"kick {self.dj}")
+                self.dj.kick()
+            logger.debug(f"invoking {self}")
+            self.invoked = True
+
+    def kick(self):
+        with self.lock:
+            assert not self.kicked
+            self.kicked = True
+            for tj in self.tjs:
+                tj.kick(self.uri)
+
 
 class _Job:
-    def __init__(self, f, ts, ds, descs, priority):
+    def __init__(self, f, ts, ds, descs, priority, dsl):
         self._f = f
         self.ts = ts
         self.ds = ds
         self.descs = descs
         self._priority = priority
+        self._dsl = dsl
         self._ds_made = set()
-        self.visited = False
+        self.invoked = False
+        self.executed = False
+        self.execution_lock = threading.RLock()
         self.lock = threading.RLock()
+        self._enqed = False
         self._dry_run = _tval.TBool(False)
 
     def __repr__(self):
@@ -247,10 +348,16 @@ class _Job:
     def unique_ds(self):
         return _unique(self.ds)
 
+    @property
+    def dsl(self):
+        return self._dsl
+
     def execute(self):
+        assert self._enqed, self
         self.f(self)
 
     def rm_targets(self):
+        assert self._enqed, self
         pass
 
     def need_update(self):
@@ -262,7 +369,10 @@ class _Job:
 
     def mark_as_made(self, d):
         with self.lock:
-            self._ds_made.add(d)
+            if d is not None:
+                assert d in self.ds, (d, self.ds)
+                assert d not in self._ds_made, (d, self._ds_made)
+                self._ds_made.add(d)
 
     def serial(self):
         return False
@@ -279,20 +389,84 @@ class _Job:
         for d in self.ds:
             print("\t" + d, file=file)
 
+    def kick(self, uri=None):
+        with self.lock:
+            self.mark_as_made(uri)
+            logger.debug(f"ds_rest() of {self}\tis\t{self.ds_rest()}")
+            if not self.ds_rest():
+                self._enq()
+
+    def _enq(self):
+        with self.lock:
+            assert not self._enqed
+            self._enqed = True
+            self.dsl.thread_pool.push_job(self)
+
+
+def _invoke(target, job_of_target, file, meta, call_chain):
+    if target in call_chain:
+        raise exception.Err(f"A circular dependency detected: {target} for {repr(call_chain)}")
+    with job_of_target.lock:
+        if target not in job_of_target:
+            puri = DSL.uriparse(target)
+            if (puri.scheme == "file") and (puri.netloc == "localhost"):
+                # Although this branch is not necessary since the `else` branch does the job,
+                # this branch is useful for a quick sanity check.
+                if os.path.lexists(target):
+                    @file([meta(target, keep=True)], [])
+                    def _(j):
+                        raise exception.Err(f"Must not happen: the job for a leaf node {target} is called")
+                else:
+                    raise exception.Err(f"No rule to make {target}")
+            else:
+                # There is no easy (and cheap) way to check the existence of remote resources.
+                @file([meta(target, keep=True)], [])
+                def _(j):
+                    raise exception.Err(f"No rule to make {target}")
+        j = job_of_target[target]
+    if j.lock:
+        if j.invoked:
+            return
+        j.invoked = True
+    current_call_chain = _Cons(target, call_chain)
+    for dep in sorted(j.unique_ds, key=functools.partial(_key_to_sort_unique_ds, job_of_target)):
+        _invoke(dep, job_of_target, file, meta, current_call_chain)
+    if not j.unique_ds:
+        j.enq()
+
+
+def _make_make_leaf_job(target, meta, file):
+    def make_leaf_job():
+        puri = DSL.uriparse(target)
+        if (puri.scheme == "file") and (puri.netloc == "localhost"):
+            # Although this branch is not necessary since the `else` branch does the job,
+            # this branch is useful for a quick sanity check.
+            if os.path.lexists(target):
+                @file([meta(target, keep=True)], [])
+                def _(j):
+                    raise exception.Err(f"Must not happen: the job for a leaf node {target} is called")
+            else:
+                raise exception.Err(f"No rule to make {target}")
+        else:
+            # There is no easy (and cheap) way to check the existence of remote resources.
+            @file([meta(target, keep=True)], [])
+            def _(j):
+                raise exception.Err(f"No rule to make {target}")
+    return make_leaf_job
+
 
 class _PhonyJob(_Job):
-    def __init__(self, f, ts, ds, descs, priority):
+    def __init__(self, f, ts, ds, descs, priority, dsl):
         if len(ts) != 1:
             raise exception.Err(f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}")
-        super().__init__(f, ts, ds, descs, priority)
+        super().__init__(f, ts, ds, descs, priority, dsl=dsl)
 
 
 class _FileJob(_Job):
     def __init__(self, f, ts, ds, descs, use_hash, serial, priority, dsl):
-        super().__init__(f, ts, ds, descs, priority)
+        super().__init__(f, ts, ds, descs, priority, dsl=dsl)
         self._use_hash = use_hash
         self._serial = _tval.TBool(serial)
-        self._dsl = dsl
         self._hash_orig = None
         self._hash_curr = None
         self._cache_path = None
@@ -306,7 +480,7 @@ class _FileJob(_Job):
     def rm_targets(self):
         logger.info(f"rm_targets({repr(self.ts)})")
         for t in self.ts:
-            meta = self._dsl._resource_of_uri[t]
+            meta = self._dsl.resource_of_uri[t]
             if not (("keep" in meta) and meta["keep"]):
                 try:
                     self._dsl.rm(t)
@@ -339,16 +513,16 @@ class _FileJob(_Job):
         return self._dsl.time_of_dep_cache.get(d, functools.partial(mtime_of, uri=d, use_hash=self._use_hash, credential=self._credential_of(d)))
 
     def _credential_of(self, uri):
-        meta = self._dsl._resource_of_uri[uri]
+        meta = self._dsl.resource_of_uri[uri]
         return meta["credential"] if "credential" in meta else None
 
 
 class _ThreadPool:
-    def __init__(self, dependent_jobs, deferred_errors, keep_going, n_max, n_serial_max, load_average, dry_run):
+    def __init__(self, resource_of_uri, keep_going, n_max, n_serial_max, load_average, dry_run):
         assert n_max > 0
         assert n_serial_max > 0
-        self._dependent_jobs = dependent_jobs
-        self._deferred_errors = deferred_errors
+        self.deferred_errors = queue.Queue()
+        self.resource_of_uri = resource_of_uri
         self._keep_going = keep_going
         self._n_max = n_max
         self._load_average = load_average
@@ -363,14 +537,6 @@ class _ThreadPool:
 
     def dry_run(self):
         return self._dry_run
-
-    def push_jobs(self, jobs):
-        # pre-load `jobs` to avoid a situation where no active thread exist while a job is enqueued
-        rem = max(len(jobs) - self._n_max, 0)
-        for i in range(rem):
-            self._enq_job(jobs[i])
-        for i in range(rem, len(jobs)):
-            self.push_job(jobs[i])
 
     def push_job(self, j):
         self._enq_job(j)
@@ -416,6 +582,7 @@ class _ThreadPool:
                         j = self._queue.get(block=True, timeout=0.01)
                     except queue.Empty:
                         break
+                logger.debug(f"working on {j}")
                 assert not j.ds_rest()
                 got_error = False
                 need_update = j.need_update()
@@ -448,13 +615,13 @@ class _ThreadPool:
                 if j.serial():
                     self._serial_queue_lock.release()
                 if not got_error:
+                    logger.debug(f"invoke ts of {j}")
                     for t in j.ts:
                         # top targets does not have dependent jobs
-                        for dj in self._dependent_jobs.get(t, ()):
-                            dj.mark_as_made(t)
-                            dj.dry_run_set_self_or(need_update and self.dry_run())
-                            if not dj.ds_rest():
-                                self.push_job(dj)
+                        for tj in self.resource_of_uri[t].tjs:
+                            tj.mark_as_made(t)
+                            tj.dry_run_set_self_or(need_update and self.dry_run())
+                            tj.kick()
             with self._threads_loc:
                 try:
                     self._threads.remove(threading.current_thread())
@@ -473,27 +640,6 @@ class _ThreadPool:
         logger.critical(e)
         _thread.interrupt_main()
         sys.exit(e)
-
-
-class _Nil:
-    __slots__ = ()
-
-    def __contains__(self, x):
-        return False
-
-
-_nil = _Nil()
-
-
-class _Cons:
-    __slots__ = ("h", "t")
-
-    def __init__(self, h, t):
-        self.h = h
-        self.t = t
-
-    def __contains__(self, x):
-        return (self.h == x) or (x in self.t)
 
 
 def _parse_argv(argv):
@@ -625,67 +771,7 @@ def _escape(s):
     return "\"" + "".join('\\"' if x == "\"" else x for x in s) + "\""
 
 
-def _process_jobs(jobs, dependent_jobs, keep_going, n_jobs, n_serial, load_average, dry_run):
-    deferred_errors = queue.Queue()
-    tp = _ThreadPool(dependent_jobs, deferred_errors, keep_going, n_jobs, n_serial, load_average, dry_run)
-    tp.push_jobs(jobs)
-    tp.wait()
-    if deferred_errors.qsize() > 0:
-        logger.error("Following errors have thrown during the execution")
-        for _ in range(deferred_errors.qsize()):
-            j, e_str = deferred_errors.get()
-            logger.error(e_str)
-            logger.error(repr(j))
-        raise exception.Err("Execution failed.")
-
-
-def _make_graph(
-        dependent_jobs,
-        leaf_jobs,
-        target,
-        job_of_target,
-        file,
-        meta,
-        call_chain,
-):
-    if target in call_chain:
-        raise exception.Err(f"A circular dependency detected: {target} for {repr(call_chain)}")
-    if target not in job_of_target:
-        ptarget = DSL.uriparse(target)
-        if (ptarget.scheme == "file") and (ptarget.netloc == "localhost"):
-            # Although this branch is not necessary since the `else` branch does the job,
-            # this branch is useful for a quick sanity check.
-            if os.path.lexists(target):
-                @file([meta(target, keep=True)], [])
-                def _(j):
-                    raise exception.Err(f"Must not happen: the job for a leaf node {target} is called")
-            else:
-                raise exception.Err(f"No rule to make {target}")
-        else:
-            # There is no easy (and cheap) way to check the existence of remote resources.
-            @file([meta(target, keep=True)], [])
-            def _(j):
-                raise exception.Err(f"No rule to make {target}")
-    j = job_of_target[target]
-    if j.visited:
-        return
-    j.visited = True
-    current_call_chain = _Cons(target, call_chain)
-    for dep in sorted(j.unique_ds, key=lambda dep: _key_to_sort_unique_ds(dep, job_of_target)):
-        dependent_jobs.setdefault(dep, []).append(j)
-        _make_graph(
-            dependent_jobs,
-            leaf_jobs,
-            dep,
-            job_of_target,
-            file,
-            meta,
-            current_call_chain,
-        )
-    j.unique_ds or leaf_jobs.append(j)
-
-
-def _key_to_sort_unique_ds(dep, job_of_target):
+def _key_to_sort_unique_ds(job_of_target, dep):
     try:
         return job_of_target[dep].priority
     except KeyError:
@@ -717,24 +803,6 @@ def mtime_of(uri, use_hash, credential):
         return resource.of_scheme[puri.scheme].mtime_of(uri, credential, use_hash)
     else:
         raise NotImplementedError(f"mtime_of({repr(uri)}) is not supported")
-
-
-def _update_resource_of_uri(resource_of_uri, targets, deps, j, lock):
-    with lock:
-        for target in targets:
-            if target in resource_of_uri:
-                r = resource_of_uri[target]
-                r.dj = j
-            else:
-                r = _Resource(target, set(), j)
-                resource_of_uri[target] = r
-        for dep in deps:
-            if dep in resource_of_uri:
-                r = resource_of_uri[dep]
-                r.add_tjs(j)
-            else:
-                r = _Resource(dep, set([j]), None)
-                resource_of_uri[dep] = r
 
 
 def _str_of_exception():

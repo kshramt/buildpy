@@ -29,7 +29,7 @@ os.environ["PYTHONPATH"] = os.getcwd() + ((":" + os.environ["PYTHONPATH"]) if "P
 python = os.environ["PYTHON"]
 
 
-dsl = buildpy.vx.DSL(use_hash=True)
+dsl = buildpy.vx.DSL(sys.argv, use_hash=True)
 file = dsl.file
 phony = dsl.phony
 loop = dsl.loop
@@ -100,4 +100,4 @@ def _(v):
 
 
 if __name__ == '__main__':
-    dsl.main(sys.argv)
+    dsl.run()

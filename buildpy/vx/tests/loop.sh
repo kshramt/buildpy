@@ -39,7 +39,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL()
+dsl = buildpy.vx.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 loop = dsl.loop
@@ -87,7 +87,7 @@ def _(x):
 
 if __name__ == '__main__':
     t1 = time.time()
-    dsl.main(sys.argv)
+    dsl.run()
     t2 = time.time()
     assert t2 - t1 < dt*(1 + nx*(1 + ny*(1 + nz)))/10
 EOF

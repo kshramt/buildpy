@@ -35,8 +35,7 @@ import sys
 
 import buildpy.vx
 
-dsl = buildpy.vx.DSL()
-# dsl = buildpy.DSL(use_hash=True) # use the content-based update scheme
+dsl = buildpy.vx.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
@@ -57,14 +56,14 @@ def _(j):
     sh(f"gcc -o {j.ts[0]} {j.ds[0]}")
 
 if __name__ == '__main__':
-    dsl.main(sys.argv)
+    dsl.run()
 ```
 
 Please see [`./build.py`](./build.py) and `buildpy/v*/tests/*.sh` for more examples.
 
 ## Usage
 
-After importing the `buildpy` module, please make a DSL instance by `dsl = buildpy.DSL()`.
+After importing the `buildpy` module, please make a DSL instance by `dsl = buildpy.vx.DSL(sys.argv)`.
 The instance, `dsl`, provides methods to construct a dependency graph and to execute the declared jobs.
 `dsl.file` is used to declare the dependencies and the command to make target files.
 `dsl.file` is used as follows:
@@ -112,7 +111,7 @@ dsl.phony("all", ["libfinalproduct.so"])
 To execute the declared jobs, please add the following line to your `build.py`:
 
 ```py
-dsl.main(sys.argv)
+dsl.run()
 ```
 
 ## News
