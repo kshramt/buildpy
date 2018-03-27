@@ -14,24 +14,55 @@ class TVal:
             return self._val
 
 
-class TDict(TVal):
+class TDict(object):
 
-    def __init__(self, d=None):
-        if d is None:
-            d = dict()
-        super().__init__(d)
+    def __init__(self, *args, **kwargs):
+        self.data = dict(*args, **kwargs)
+        self.lock = threading.RLock()
 
-    def __setitem__(self, k, v):
-        with self._lock:
-            self._val[k] = v
+    def __len__(self):
+        with self.lock:
+            return self.data.__len__()
 
     def __getitem__(self, k):
-        with self._lock:
-            return self._val[k]
+        with self.lock:
+            return self.data.__getitem__(k)
+
+    def __setitem__(self, k, v):
+        with self.lock:
+            return self.data.__setitem__(k, v)
+
+    def __delitem__(self, k):
+        with self.lock:
+            return self.data.__delitem__(k)
 
     def __contains__(self, k):
-        with self._lock:
-            return k in self._val
+        with self.lock:
+            return self.data.__contains__(k)
+
+    def __repr__(self):
+        with self.lock:
+            return self.__class__.__name__ + "(" + repr(self.data) + ")"
+
+    def get(self, k, default=None):
+        with self.lock:
+            return self.data.get(k, default)
+
+    def items(self):
+        with self.lock:
+            return self.data.items()
+
+    def keys(self):
+        with self.lock:
+            return self.data.keys()
+
+    def values(self):
+        with self.lock:
+            return self.data.values()
+
+    def setdefault(self, k, default=None):
+        with self.lock:
+            return self.data.setdefault(k, default)
 
 
 class TDefaultDict(TVal):
