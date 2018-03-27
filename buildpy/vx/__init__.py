@@ -398,7 +398,7 @@ class _Job:
 
     def _enq(self):
         with self.lock:
-            assert not self._enqed
+            assert not self._enqed, self
             self._enqed = True
             self.dsl.thread_pool.push_job(self)
 
