@@ -317,7 +317,10 @@ class _Job:
         self._dry_run = _tval.TBool(False)
 
     def __repr__(self):
-        return f"{type(self).__name__}({repr(self.ts)}, {repr(self.ds)}, descs={repr(self.descs)})"
+        ds = self.ds
+        if len(self.ds) > 6:
+            ds = ds[:3] + [_cdots] + ds[-3:]
+        return f"{type(self).__name__}({self.ts}, {ds}, descs={repr(self.descs)}).status={repr(self.status)}"
 
     def __lt__(self, other):
         return self.priority < other.priority
@@ -472,7 +475,10 @@ class _FileJob(_Job):
         self._cache_path = None
 
     def __repr__(self):
-        return f"{type(self).__name__}({repr(self.ts)}, {repr(self.ds)}, descs={repr(self.descs)}, serial={self.serial()})"
+        ds = self.ds
+        if len(self.ds) > 6:
+            ds = ds[:3] + [_cdots] + ds[-3:]
+        return f"{type(self).__name__}({self.ts}, {ds}, descs={repr(self.descs)}, serial={self.serial()}).status={repr(self.status)}"
 
     def serial(self):
         return self._serial.val()
@@ -640,6 +646,15 @@ class _ThreadPool:
         logger.critical(e)
         _thread.interrupt_main()
         sys.exit(e)
+
+
+class CDots(object):
+
+    def __repr__(self):
+        return "..."
+
+
+_cdots = CDots()
 
 
 def _parse_argv(argv):
