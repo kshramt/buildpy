@@ -56,7 +56,7 @@ class DSL:
         self.thread_pool = _ThreadPool(
             self.resource_of_uri,
             self.args.keep_going, self.args.jobs,
-            self.args.n_serial, self.args.load_average, self.args.dry_run,
+            self.args.n_serial, self.args.load_average
         )
 
     def file(self, targets, deps, desc=None, use_hash=None, serial=False, priority=_PRIORITY_DEFAULT):
@@ -314,7 +314,6 @@ class _Job:
         self.execution_lock = threading.RLock()
         self.lock = threading.RLock()
         self._enqed = False
-        self._dry_run = _tval.TBool(False)
 
     def __repr__(self):
         ds = self.ds
@@ -356,8 +355,11 @@ class _Job:
         return self._dsl
 
     def execute(self):
-        assert self._enqed, self
-        self.f(self)
+        if self.dsl.dry_run:
+            self.f(self)
+        else:
+            self.write()
+            print()
 
     def rm_targets(self):
         assert self._enqed, self
@@ -379,12 +381,6 @@ class _Job:
 
     def serial(self):
         return False
-
-    def dry_run(self):
-        return self._dry_run.val()
-
-    def dry_run_set_self_or(self, x):
-        return self._dry_run.set_self_or(x)
 
     def write(self, file=sys.stdout):
         for t in self.ts:
@@ -494,7 +490,7 @@ class _FileJob(_Job):
                     logger.info(f"Failed to remove {t}")
 
     def need_update(self):
-        if self.dry_run():
+        if self.dsl.args.dry_run:
             return True
         try:
             t_ts = min(mtime_of(uri=t, use_hash=False, credential=self._credential_of(t)) for t in self.ts)
@@ -523,8 +519,8 @@ class _FileJob(_Job):
         return meta["credential"] if "credential" in meta else None
 
 
-class _ThreadPool:
-    def __init__(self, resource_of_uri, keep_going, n_max, n_serial_max, load_average, dry_run):
+class _ThreadPool(object):
+    def __init__(self, resource_of_uri, keep_going, n_max, n_serial_max, load_average):
         assert n_max > 0
         assert n_serial_max > 0
         self.deferred_errors = queue.Queue()
@@ -532,7 +528,6 @@ class _ThreadPool:
         self._keep_going = keep_going
         self._n_max = n_max
         self._load_average = load_average
-        self._dry_run = dry_run
         self._threads = _tval.TSet()
         self._unwaited_threads = _tval.TSet()
         self._threads_loc = threading.Lock()
@@ -540,9 +535,6 @@ class _ThreadPool:
         self._serial_queue = queue.PriorityQueue()
         self._serial_queue_lock = threading.Semaphore(n_serial_max)
         self._n_running = _tval.TInt(0)
-
-    def dry_run(self):
-        return self._dry_run
 
     def push_job(self, j):
         self._enq_job(j)
@@ -602,11 +594,7 @@ class _ThreadPool:
                             time.sleep(1)
                     self._n_running.inc()
                     try:
-                        if self.dry_run():
-                            j.write()
-                            print()
-                        else:
-                            j.execute()
+                        j.execute()
                     except Exception as e:
                         got_error = True
                         logger.error(repr(j))
