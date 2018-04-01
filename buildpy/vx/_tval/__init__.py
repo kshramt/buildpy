@@ -1,4 +1,3 @@
-import collections
 import threading
 
 
@@ -65,24 +64,6 @@ class TDict(object):
             return self.data.setdefault(k, default)
 
 
-class TDefaultDict(TVal):
-
-    def __init__(self, default_factory):
-        super().__init__(collections.defaultdict(default_factory))
-
-    def __setitem__(self, k, v):
-        with self._lock:
-            self._val[k] = v
-
-    def __getitem__(self, k):
-        with self._lock:
-            return self._val[k]
-
-    def __contains__(self, k):
-        with self._lock:
-            return k in self._val
-
-
 class Cache:
 
     def __init__(self):
@@ -129,32 +110,6 @@ class TSet(TVal):
             return self._val.pop()
 
 
-class TStack(TVal):
-    class Empty(Exception):
-        def __init__(self):
-            pass
-
-    def __init__(self):
-        super().__init__([])
-
-    def put(self, x):
-        with self._lock:
-            self._val.append(x)
-
-    def pop(self, block=True, timeout=-1):
-        success = self._lock.acquire(blocking=block, timeout=timeout)
-        if success:
-            if self._val:
-                ret = self._val.pop()
-            else:
-                success = False
-        self._lock.release()
-        if success:
-            return ret
-        else:
-            raise self.Empty()
-
-
 class TInt(TVal):
     def __init__(self, val):
         super().__init__(val)
@@ -166,12 +121,3 @@ class TInt(TVal):
     def dec(self):
         with self._lock:
             self._val -= 1
-
-
-class TBool(TVal):
-    def __init__(self, val):
-        super().__init__(val)
-
-    def set_self_or(self, x):
-        with self._lock:
-            self._val = self._val or x

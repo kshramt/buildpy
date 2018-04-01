@@ -341,6 +341,7 @@ class _Job(object):
         self._status = "initial"
         self.executed = False
         self.lock = threading.RLock()
+        self.serial = False
 
     def __repr__(self):
         ds = self.ds
@@ -420,9 +421,6 @@ class _Job(object):
             if d is not None:
                 assert d in self.ds, (d, self.ds)
                 self._ds_made.add(d)
-
-    def serial(self):
-        return False
 
     def write(self, file=sys.stdout):
         logger.debug(f"{self}")
@@ -511,7 +509,7 @@ class _FileJob(_Job):
     def __init__(self, f, ts, ds, descs, use_hash, serial, priority, dsl):
         super().__init__(f, ts, ds, descs, priority, dsl=dsl)
         self._use_hash = use_hash
-        self._serial = _tval.TBool(serial)
+        self.serial = serial
         self._hash_orig = None
         self._hash_curr = None
         self._cache_path = None
@@ -520,10 +518,7 @@ class _FileJob(_Job):
         ds = self.ds
         if len(self.ds) > 6:
             ds = ds[:3] + [_cdots] + ds[-3:]
-        return f"{type(self).__name__}({self.ts}, {ds}, serial={self.serial()}).status={repr(self.status)}"
-
-    def serial(self):
-        return self._serial.val()
+        return f"{type(self).__name__}({self.ts}, {ds}, serial={self.serial}).status={repr(self.status)}"
 
     def rm_targets(self):
         logger.info(f"rm_targets({repr(self.ts)})")
@@ -603,7 +598,7 @@ class _ThreadPool(object):
                 self._unwaited_threads.add(t)
 
     def _enq_job(self, j):
-        if j.serial():
+        if j.serial:
             self._serial_queue.put(j)
         else:
             self._queue.put(j)
@@ -623,7 +618,7 @@ class _ThreadPool(object):
                 if self._serial_queue_lock.acquire(blocking=False):
                     try:
                         j = self._serial_queue.get(block=False)
-                        assert j.serial()
+                        assert j.serial
                     except queue.Empty:
                         self._serial_queue_lock.release()
                 if j is None:
@@ -657,7 +652,7 @@ class _ThreadPool(object):
                         else:
                             self._die(e_str)
                     self._n_running.dec()
-                if j.serial():
+                if j.serial:
                     self._serial_queue_lock.release()
                 if not got_error:
                     j.kick_ts()
