@@ -207,6 +207,8 @@ class _Cons:
 
 class _Resource(object):
 
+    statuses = ("initial", "invoked", "done")
+
     def __init__(self, uri, tjs, dj, dsl):
         self.lock = threading.RLock()
         self.uri = uri
@@ -214,11 +216,10 @@ class _Resource(object):
         self._dj = dj
         self.dsl = dsl
         self.meta = dict()
-        self.invoked = False
-        self.kicked = False
+        self._status = "initial"
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({repr(self.uri)}).meta={self.meta}"
+        return f"{self.__class__.__name__}({repr(self.uri)}).status={self.status}.meta={self.meta}"
 
     @property
     def tjs(self):
@@ -233,6 +234,18 @@ class _Resource(object):
         with self.lock: # 3
             assert (self.dj is None) or self.dj == dj, (self, self.dj)
             self._dj = dj
+
+    @property
+    def status(self):
+        assert self._status in self.statuses, self
+        return self._status
+
+    @status.setter
+    def status(self, v):
+        with self.lock: # 4
+            assert self._status in self.statuses, self._status
+            assert v in self.statuses, v
+            self._status = v
 
     def add_tjs(self, tj):
         with self.lock: # 5
@@ -255,52 +268,72 @@ class _Resource(object):
     def invoke(self, call_chain=_nil):
         logger.debug(f"{self}")
         if self in call_chain:
-            raise exception.Err(f"A circular dependency detected: {self.uri} for {repr(call_chain)}")
-        with self.lock:
-            if self.kicked:
-                logger.debug("is kicked")
-                self.invoked = True
-                for tj in self.tjs:
-                    tj.kick()
+            raise exception.Err(f"A circular dependency detected: {self} for {call_chain}")
+        with self.lock: # 9
+            to_be_done = None
+            if self.status == "done":
+                # todo: modify me after the introduction of dyn
+                to_be_done = "self.kick_ts"
+                # This branch should be executed outside the `with self.lock`
+            elif self.status == "invoked":
                 return
-            if self.invoked:
-                logger.debug("is invoked")
-                return
-            if self.dj is None:
-                puri = DSL.uriparse(self.uri)
-                if (puri.scheme == "file") and (puri.netloc == "localhost"):
-                    # Although this branch is not necessary since the `else` branch does the job,
-                    # this branch is useful for a quick sanity check.
-                    if os.path.lexists(puri.path):
+            elif self.status == "initial":
+                if self.dj is None:
+                    puri = DSL.uriparse(self.uri)
+                    if (puri.scheme == "file") and (puri.netloc == "localhost"):
+                        # Although this branch is not necessary since the `else` branch does the job,
+                        # this branch is useful for a quick sanity check.
+                        if os.path.lexists(puri.path):
+                            @self.dsl.file([self.dsl.meta(self.uri, keep=True)], [])
+                            def _(j):
+                                raise exception.Err(f"Must not happen: the job for a leaf node {self.uri} is called")
+                        else:
+                            raise exception.Err(f"No rule to make {self.uri}")
+                    else:
+                        # There is no easy (and cheap) way to check the existence of remote resources.
                         @self.dsl.file([self.dsl.meta(self.uri, keep=True)], [])
                         def _(j):
-                            raise exception.Err(f"Must not happen: the job for a leaf node {self.uri} is called")
-                    else:
-                        raise exception.Err(f"No rule to make {self.uri}")
-                else:
-                    # There is no easy (and cheap) way to check the existence of remote resources.
-                    @self.dsl.file([self.dsl.meta(self.uri, keep=True)], [])
-                    def _(j):
-                        raise exception.Err(f"No rule to make {self.uri}")
-            if self.dj.ds:
-                logger.debug(f"invoke ds of {self.dj}")
-                for d in self.dj.ds:
-                    self.dsl.resource_of_uri[d].invoke(_Cons(self, call_chain))
+                            raise exception.Err(f"No rule to make {self.uri}")
+                self.status = "invoked"
+                to_be_done = "self.dj.invoke"
+                # This branch should be executed outside the `with self.lock`
             else:
-                logger.debug(f"kick {self.dj}")
-                self.dj.kick()
-            logger.debug(f"invoking {self}")
-            self.invoked = True
+                raise exception.Err(f"Must not happen {self}")
+        if to_be_done == "self.kick_ts":
+            assert self.status == "done"
+            self.kick_ts()
+        elif to_be_done == "self.dj.invoke":
+            assert self.status == "invoked"
+            assert self.dj is not None, self
+            self.dj.invoke(_Cons(self, _Cons(self, call_chain)))
+        else:
+            raise exception.Err("Must not happen: to_be_done = {to_be_done} for {self}")
 
     def kick(self):
-        with self.lock:
-            assert not self.kicked
-            self.kicked = True
-            for tj in self.tjs:
-                tj.kick(self.uri)
+        logger.debug(f"{self}")
+        with self.lock: # 10
+            assert self.status in ("initial", "invoked"), self
+            if self.status == "initial":
+                self.status = "done"
+                return
+            elif self.status == "invoked":
+                self.kick_ts()
+                return
+            else:
+                raise exception.Err(f"Must not happen: {self}")
+
+    def kick_ts(self):
+        logger.debug(f"{self}")
+        assert self.status in ("invoked", "done")
+        for tj in self.tjs:
+            tj.kick(self.uri)
+        self.status = "done"
 
 
-class _Job:
+class _Job(object):
+
+    statuses = ("initial", "invoked", "enqed", "done")
+
     def __init__(self, f, ts, ds, descs, priority, dsl):
         self._f = f
         self.ts = ts
@@ -309,11 +342,9 @@ class _Job:
         self._priority = priority
         self._dsl = dsl
         self._ds_made = set()
-        self.invoked = False
+        self._status = "initial"
         self.executed = False
-        self.execution_lock = threading.RLock()
         self.lock = threading.RLock()
-        self._enqed = False
 
     def __repr__(self):
         ds = self.ds
@@ -354,12 +385,27 @@ class _Job:
     def dsl(self):
         return self._dsl
 
+    @property
+    def status(self):
+        assert self._status in self.statuses, self
+        return self._status
+
+    @status.setter
+    def status(self, v):
+        with self.lock: # 11
+            assert self._status in self.statuses, self._status
+            assert v in self.statuses, v
+            self._status = v
+
     def execute(self):
-        if self.dsl.dry_run:
-            self.f(self)
-        else:
-            self.write()
-            print()
+        logger.debug(f"{self}")
+        with self.lock: # 16
+            assert (self.status == "enqed"), self
+            if self.dsl.args.dry_run:
+                self.write()
+            else:
+                self.f(self)
+            self.executed = True
 
     def rm_targets(self):
         assert (self.status == "enqed"), self
@@ -376,7 +422,6 @@ class _Job:
         with self.lock: # 12
             if d is not None:
                 assert d in self.ds, (d, self.ds)
-                assert d not in self._ds_made, (d, self._ds_made)
                 self._ds_made.add(d)
 
     def serial(self):
@@ -388,72 +433,70 @@ class _Job:
             print(t, file=file)
         for d in self.ds:
             print("\t" + d, file=file)
+        print(file=file)
+
+    def invoke(self, call_chain=_nil):
+        logger.debug(f"{self}")
+        if self in call_chain:
+            raise exception.Err(f"A circular dependency detected: {self} for {call_chain}")
+        with self.lock: # 13
+            invoke_ds = False
+            if self.status == "invoked":
+                return
+            elif self.status == "enqed":
+                return
+            elif self.status == "done":
+                self.kick_ts()
+                return
+            elif self.status == "initial":
+                self.status = "invoked"
+                if self.ds:
+                    invoke_ds = True
+                    # This branch should be executed outside the `with self.lock`
+                else:
+                    self.kick()
+                    return
+            else:
+                raise exception.Err("Must not happen: {self}")
+        assert invoke_ds
+        assert self.status == "invoked"
+        assert self.ds
+        cc = _Cons(self, call_chain)
+        for d in self.ds:
+            self.dsl.resource_of_uri[d].invoke(cc)
 
     def kick(self, uri=None):
-        with self.lock:
-            self.mark_as_made(uri)
-            logger.debug(f"ds_rest() of {self}\tis\t{self.ds_rest()}")
-            if not self.ds_rest():
-                self._enq()
+        logger.debug(f"{self}")
+        with self.lock: # 14
+            if self.status == "initial":
+                self.mark_as_made(uri)
+                return
+            elif self.status == "invoked":
+                self.mark_as_made(uri)
+                if not self.ds_rest():
+                    self._enq()
+                return
+            elif self.status == "enqed":
+                assert not self.ds_rest()
+                return
+            elif self.status == "done":
+                assert not self.ds_rest()
+                return
+            else:
+                raise exception.Err("Must not happen: {self}")
 
     def _enq(self):
-        with self.lock:
-            assert not self._enqed, self
-            self._enqed = True
         logger.debug(f"{self}")
+        with self.lock: # 15
+            self.status = "enqed"
             self.dsl.thread_pool.push_job(self)
 
-
-def _invoke(target, job_of_target, file, meta, call_chain):
-    if target in call_chain:
-        raise exception.Err(f"A circular dependency detected: {target} for {repr(call_chain)}")
-    with job_of_target.lock:
-        if target not in job_of_target:
-            puri = DSL.uriparse(target)
-            if (puri.scheme == "file") and (puri.netloc == "localhost"):
-                # Although this branch is not necessary since the `else` branch does the job,
-                # this branch is useful for a quick sanity check.
-                if os.path.lexists(target):
-                    @file([meta(target, keep=True)], [])
-                    def _(j):
-                        raise exception.Err(f"Must not happen: the job for a leaf node {target} is called")
-                else:
-                    raise exception.Err(f"No rule to make {target}")
-            else:
-                # There is no easy (and cheap) way to check the existence of remote resources.
-                @file([meta(target, keep=True)], [])
-                def _(j):
-                    raise exception.Err(f"No rule to make {target}")
-        j = job_of_target[target]
-    if j.lock:
-        if j.invoked:
-            return
-        j.invoked = True
-    current_call_chain = _Cons(target, call_chain)
-    for dep in sorted(j.unique_ds, key=functools.partial(_key_to_sort_unique_ds, job_of_target)):
-        _invoke(dep, job_of_target, file, meta, current_call_chain)
-    if not j.unique_ds:
-        j.enq()
-
-
-def _make_make_leaf_job(target, meta, file):
-    def make_leaf_job():
-        puri = DSL.uriparse(target)
-        if (puri.scheme == "file") and (puri.netloc == "localhost"):
-            # Although this branch is not necessary since the `else` branch does the job,
-            # this branch is useful for a quick sanity check.
-            if os.path.lexists(target):
-                @file([meta(target, keep=True)], [])
-                def _(j):
-                    raise exception.Err(f"Must not happen: the job for a leaf node {target} is called")
-            else:
-                raise exception.Err(f"No rule to make {target}")
-        else:
-            # There is no easy (and cheap) way to check the existence of remote resources.
-            @file([meta(target, keep=True)], [])
-            def _(j):
-                raise exception.Err(f"No rule to make {target}")
-    return make_leaf_job
+    def kick_ts(self):
+        logger.debug(f"{self}")
+        assert self.status in ("enqed", "done"), self
+        for t in self.ts:
+            self.dsl.resource_of_uri[t].kick()
+        self.status = "done"
 
 
 class _PhonyJob(_Job):
@@ -492,8 +535,13 @@ class _FileJob(_Job):
                     logger.info(f"Failed to remove {t}")
 
     def need_update(self):
-        if self.dsl.args.dry_run:
-            return True
+        with self.lock:
+            assert self.status == "enqed", self
+            if self.dsl.args.dry_run and (len(self.ds) > 0) and any(self.dsl.resource_of_uri[d].dj.executed for d in self.ds):
+                return True
+            return self._need_update()
+
+    def _need_update(self):
         try:
             t_ts = min(mtime_of(uri=t, use_hash=False, credential=self._credential_of(t)) for t in self.ts)
         except (OSError, google.cloud.exceptions.NotFound, exception.NotFound):
@@ -532,7 +580,7 @@ class _ThreadPool(object):
         self._load_average = load_average
         self._threads = _tval.TSet()
         self._unwaited_threads = _tval.TSet()
-        self._threads_loc = threading.Lock()
+        self._threads_loc = threading.RLock()
         self._queue = queue.PriorityQueue()
         self._serial_queue = queue.PriorityQueue()
         self._serial_queue_lock = threading.Semaphore(n_serial_max)
@@ -611,13 +659,7 @@ class _ThreadPool(object):
                 if j.serial():
                     self._serial_queue_lock.release()
                 if not got_error:
-                    logger.debug(f"invoke ts of {j}")
-                    for t in j.ts:
-                        # top targets does not have dependent jobs
-                        for tj in self.resource_of_uri[t].tjs:
-                            tj.mark_as_made(t)
-                            tj.dry_run_set_self_or(need_update and self.dry_run())
-                            tj.kick()
+                    j.kick_ts()
             with self._threads_loc:
                 try:
                     self._threads.remove(threading.current_thread())
