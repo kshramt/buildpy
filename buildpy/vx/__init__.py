@@ -270,44 +270,40 @@ class _Resource(object):
         if self in call_chain:
             raise exception.Err(f"A circular dependency detected: {self} for {call_chain}")
         with self.lock: # 9
-            to_be_done = None
-            if self.status == "done":
-                # todo: modify me after the introduction of dyn
-                to_be_done = "self.kick_ts"
-                # This branch should be executed outside the `with self.lock`
-            elif self.status == "invoked":
-                return
-            elif self.status == "initial":
-                if self.dj is None:
-                    puri = DSL.uriparse(self.uri)
-                    if (puri.scheme == "file") and (puri.netloc == "localhost"):
-                        # Although this branch is not necessary since the `else` branch does the job,
-                        # this branch is useful for a quick sanity check.
-                        if os.path.lexists(puri.path):
-                            @self.dsl.file([self.dsl.meta(self.uri, keep=True)], [])
-                            def _(j):
-                                raise exception.Err(f"Must not happen: the job for a leaf node {self.uri} is called")
-                        else:
-                            raise exception.Err(f"No rule to make {self.uri}")
-                    else:
-                        # There is no easy (and cheap) way to check the existence of remote resources.
-                        @self.dsl.file([self.dsl.meta(self.uri, keep=True)], [])
-                        def _(j):
-                            raise exception.Err(f"No rule to make {self.uri}")
+            status = self.status
+            if status == "initial":
                 self.status = "invoked"
-                to_be_done = "self.dj.invoke"
-                # This branch should be executed outside the `with self.lock`
+            elif status == "invoked":
+                return
+            elif status == "done":
+                pass
             else:
                 raise exception.Err(f"Must not happen {self}")
-        if to_be_done == "self.kick_ts":
-            assert self.status == "done"
-            self.kick_ts()
-        elif to_be_done == "self.dj.invoke":
+        if status == "initial":
             assert self.status == "invoked"
-            assert self.dj is not None, self
-            self.dj.invoke(_Cons(self, _Cons(self, call_chain)))
+            if self.dj is None:
+                puri = DSL.uriparse(self.uri)
+                if (puri.scheme == "file") and (puri.netloc == "localhost"):
+                    # Although this branch is not necessary since the `else` branch does the job,
+                    # this branch is useful for a quick sanity check.
+                    if os.path.lexists(puri.path):
+                        @self.dsl.file([self.dsl.meta(self.uri, keep=True)], [])
+                        def _(j):
+                            raise exception.Err(f"Must not happen: the job for a leaf node {self.uri} is called")
+                    else:
+                        raise exception.Err(f"No rule to make {self.uri}")
+                else:
+                    # There is no easy (and cheap) way to check the existence of remote resources.
+                    @self.dsl.file([self.dsl.meta(self.uri, keep=True)], [])
+                    def _(j):
+                        raise exception.Err(f"No rule to make {self.uri}")
+            self.dj.invoke(_Cons(self, call_chain))
+        elif status == "invoked":
+            raise exception.Err("Must not happen {self}")
+        elif status == "done":
+            self.kick_ts()
         else:
-            raise exception.Err("Must not happen: to_be_done = {to_be_done} for {self}")
+            raise exception.Err(f"Must not happen {status} for {self}")
 
     def kick(self):
         logger.debug(f"{self}")
@@ -440,30 +436,33 @@ class _Job(object):
         if self in call_chain:
             raise exception.Err(f"A circular dependency detected: {self} for {call_chain}")
         with self.lock: # 13
-            invoke_ds = False
-            if self.status == "invoked":
-                return
-            elif self.status == "enqed":
-                return
-            elif self.status == "done":
-                self.kick_ts()
-                return
-            elif self.status == "initial":
+            status = self.status
+            if status == "initial":
                 self.status = "invoked"
-                if self.ds:
-                    invoke_ds = True
-                    # This branch should be executed outside the `with self.lock`
-                else:
-                    self.kick()
-                    return
+            elif status == "invoked":
+                return
+            elif status == "enqed":
+                return
+            elif status == "done":
+                pass
             else:
-                raise exception.Err("Must not happen: {self}")
-        assert invoke_ds
-        assert self.status == "invoked"
-        assert self.ds
-        cc = _Cons(self, call_chain)
-        for d in self.ds:
-            self.dsl.resource_of_uri[d].invoke(cc)
+                raise exception.Err(f"Must not happen {status} for {self}")
+        if status == "initial":
+            assert self.status == "invoked"
+            if self.ds:
+                cc = _Cons(self, call_chain)
+                for d in self.ds:
+                    self.dsl.resource_of_uri[d].invoke(cc)
+            else:
+                self.kick()
+        elif status == "invoked":
+            raise exception.Err(f"Must not happen {status} for {self}")
+        elif status == "enqed":
+            raise exception.Err(f"Must not happen {status} for {self}")
+        elif status == "done":
+            self.kick_ts()
+        else:
+            raise exception.Err(f"Must not happen {status} for {self}")
 
     def kick(self, uri=None):
         logger.debug(f"{self}")
