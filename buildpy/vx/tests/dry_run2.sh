@@ -33,6 +33,19 @@ import sys
 import buildpy.vx
 
 
+def _setup_logger():
+    import logging
+    logger = logging.getLogger()
+    hdl = logging.StreamHandler(sys.stderr)
+    hdl.setFormatter(logging.Formatter("%(levelname)s\t%(process)d\t%(asctime)s\t%(filename)s\t%(funcName)s\t%(lineno)d\t%(message)s"))
+    logger.addHandler(hdl)
+    logger.setLevel(logging.DEBUG)
+    return logger
+
+
+logger = _setup_logger()
+
+
 os.environ["SHELL"] = "/bin/bash"
 os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable

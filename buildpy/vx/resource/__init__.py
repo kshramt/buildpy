@@ -248,7 +248,6 @@ def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
     min(uri_time, cache_time)
     """
     assert puri.path, puri
-    logger.info(str(threading.get_ident()) + "\t" + str(puri))
     cache_path = _convenience.jp(CACHE_DIR, puri.scheme, puri.netloc, os.path.abspath(puri.path))
     try:
         cache_path_stat = os.stat(cache_path)

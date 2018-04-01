@@ -102,7 +102,7 @@ class DSL:
             _print_dependencies_dot(self._job_of_target)
         else:
             for target in self.args.targets:
-                logger.debug(f"run {target}")
+                logger.debug(f"{target}")
                 self.resource_of_uri[target].invoke()
             self.thread_pool.wait()
             if self.thread_pool.deferred_errors.qsize() > 0:
@@ -125,7 +125,7 @@ class DSL:
         meta = self.resource_of_uri[uri]
         credential = meta["credential"] if "credential" in meta else None
         if puri.scheme == "file":
-            assert puri.netloc == "localhost"
+            assert (puri.netloc == "localhost"), puri
         if puri.scheme in resource.of_scheme:
             return resource.of_scheme[puri.scheme].rm(uri, credential)
         else:
@@ -158,14 +158,14 @@ class _JobOfTarget(object):
         self._resource_of_uri = resource_of_uri
 
     def __getitem__(self, k):
-        with self.lock:
+        with self.lock: # 1
             ret = self._resource_of_uri[k].dj
             if ret is None:
                 raise KeyError(k)
             return ret
 
     def __contains__(self, k):
-        with self.lock:
+        with self.lock: # 2
             return (k in self._resource_of_uri) and (self._resource_of_uri[k].dj is not None)
 
     def keys(self):
@@ -230,30 +230,30 @@ class _Resource(object):
 
     @dj.setter
     def dj(self, dj):
-        with self.lock:
+        with self.lock: # 3
             assert (self.dj is None) or self.dj == dj, (self, self.dj)
             self._dj = dj
 
     def add_tjs(self, tj):
-        with self.lock:
+        with self.lock: # 5
             self._tjs.add(tj)
 
     def __getitem__(self, k):
-        with self.lock:
+        with self.lock: # 6
             return self.meta[k]
 
     def __setitem__(self, k, v):
-        with self.lock:
+        with self.lock: # 7
             if (k in self.meta) and (self.meta[k] != v):
                 raise exception.Err(f"Tried to overwrite {self}[{repr(k)}] = {self.meta[k]} by {v}")
             self.meta[k] = v
 
     def __contains__(self, v):
-        with self.lock:
+        with self.lock: # 8
             return v in self.meta
 
     def invoke(self, call_chain=_nil):
-        logger.debug(f"invoke {self} with {call_chain}")
+        logger.debug(f"{self}")
         if self in call_chain:
             raise exception.Err(f"A circular dependency detected: {self.uri} for {repr(call_chain)}")
         with self.lock:
@@ -319,7 +319,7 @@ class _Job:
         ds = self.ds
         if len(self.ds) > 6:
             ds = ds[:3] + [_cdots] + ds[-3:]
-        return f"{type(self).__name__}({self.ts}, {ds}, descs={repr(self.descs)}).status={repr(self.status)}"
+        return f"{type(self).__name__}({self.ts}, {ds}).status={repr(self.status)}"
 
     def __lt__(self, other):
         return self.priority < other.priority
@@ -362,7 +362,7 @@ class _Job:
             print()
 
     def rm_targets(self):
-        assert self._enqed, self
+        assert (self.status == "enqed"), self
         pass
 
     def need_update(self):
@@ -373,7 +373,7 @@ class _Job:
         return set(self.ds) - self._ds_made
 
     def mark_as_made(self, d):
-        with self.lock:
+        with self.lock: # 12
             if d is not None:
                 assert d in self.ds, (d, self.ds)
                 assert d not in self._ds_made, (d, self._ds_made)
@@ -383,6 +383,7 @@ class _Job:
         return False
 
     def write(self, file=sys.stdout):
+        logger.debug(f"{self}")
         for t in self.ts:
             print(t, file=file)
         for d in self.ds:
@@ -399,6 +400,7 @@ class _Job:
         with self.lock:
             assert not self._enqed, self
             self._enqed = True
+        logger.debug(f"{self}")
             self.dsl.thread_pool.push_job(self)
 
 
@@ -474,7 +476,7 @@ class _FileJob(_Job):
         ds = self.ds
         if len(self.ds) > 6:
             ds = ds[:3] + [_cdots] + ds[-3:]
-        return f"{type(self).__name__}({self.ts}, {ds}, descs={repr(self.descs)}, serial={self.serial()}).status={repr(self.status)}"
+        return f"{type(self).__name__}({self.ts}, {ds}, serial={self.serial()}).status={repr(self.status)}"
 
     def serial(self):
         return self._serial.val()
@@ -730,7 +732,6 @@ def _print_descriptions(job_of_target):
 def _print_dependencies(job_of_target):
     for j in sorted(set(job_of_target.values()), key=lambda j: j.ts):
         j.write()
-        print()
 
 
 def _print_dependencies_dot(job_of_target):
@@ -801,7 +802,7 @@ def _unique(xs):
 def mtime_of(uri, use_hash, credential):
     puri = DSL.uriparse(uri)
     if puri.scheme == "file":
-        assert puri.netloc == "localhost"
+        assert (puri.netloc == "localhost"), puri
     if puri.scheme in resource.of_scheme:
         return resource.of_scheme[puri.scheme].mtime_of(uri, credential, use_hash)
     else:
