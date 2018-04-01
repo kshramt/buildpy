@@ -12,7 +12,7 @@ import buildpy.vx
 def _setup_logger():
     logger = logging.getLogger()
     hdl = logging.StreamHandler(sys.stderr)
-    hdl.setFormatter(logging.Formatter("%(levelname)s %(process)d %(thread)d %(asctime)s %(filename)s %(lineno)d %(funcName)s %(message)s"))
+    hdl.setFormatter(logging.Formatter("%(levelname)s %(process)d %(thread)d %(asctime)s %(filename)s %(lineno)d %(funcName)s %(message)s", "%y%m%d%H%M%S"))
     logger.addHandler(hdl)
     logger.setLevel(logging.DEBUG)
     return logger
