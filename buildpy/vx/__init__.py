@@ -397,11 +397,12 @@ class _Job(object):
         logger.debug(f"{self}")
         with self.lock: # 16
             assert (self.status == "enqed"), self
-            if self.dsl.args.dry_run:
-                self.write()
-            else:
-                self.f(self)
+            assert (not self.executed), self
             self.executed = True
+        if self.dsl.args.dry_run:
+            self.write()
+        else:
+            self.f(self)
 
     def rm_targets(self):
         assert (self.status == "enqed"), self
@@ -487,8 +488,9 @@ class _Job(object):
     def _enq(self):
         logger.debug(f"{self}")
         with self.lock: # 15
+            assert self.status == "invoked"
             self.status = "enqed"
-            self.dsl.thread_pool.push_job(self)
+        self.dsl.thread_pool.push_job(self)
 
     def kick_ts(self):
         logger.debug(f"{self}")
