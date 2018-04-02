@@ -79,6 +79,7 @@ class DSL:
         with self.resource_of_uri_lock:
             if target in self._job_of_target:
                 j = self._job_of_target[target]
+                assert j.status == "initial", j
                 j.ds.extend(deps)
                 if desc is not None:
                     j.descs.append(desc)
