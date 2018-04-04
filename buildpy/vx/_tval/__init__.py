@@ -128,10 +128,10 @@ class ddict(object):
     >>> conf = ddict()
     >>> conf.z = 99
     >>> conf
-    ddict(z=99)
+    ddict({'z': 99})
     >>> conf = ddict(a=1, b=ddict(c=2, d=ddict(e=3)))
     >>> conf
-    ddict(a=1, b=ddict(c=2, d=ddict(e=3)))
+    ddict({'a': 1, 'b': ddict({'c': 2, 'd': ddict({'e': 3})})})
     >>> conf.a
     1
     >>> conf.b.c
@@ -139,39 +139,46 @@ class ddict(object):
     >>> conf.a = 99
     >>> conf.b.c = 88
     >>> conf
-    ddict(a=99, b=ddict(c=88, d=ddict(e=3)))
+    ddict({'a': 99, 'b': ddict({'c': 88, 'd': ddict({'e': 3})})})
     >>> conf.a = 1
     >>> conf.b.c = 2
     >>> conf._update(dict(p=9, r=10))
-    ddict(a=1, b=ddict(c=2, d=ddict(e=3)), p=9, r=10)
+    ddict({'a': 1, 'b': ddict({'c': 2, 'd': ddict({'e': 3})}), 'p': 9, 'r': 10})
     >>> conf._to_dict_rec()
     {'a': 1, 'b': {'c': 2, 'd': {'e': 3}}, 'p': 9, 'r': 10}
     >>> conf._of_dict_rec({'a': 1, 'b': {'c': 2, 'd': {'e': 3}}})
-    ddict(a=1, b=ddict(c=2, d=ddict(e=3)))
+    ddict({'a': 1, 'b': ddict({'c': 2, 'd': ddict({'e': 3})})})
     >>> conf._to_dict()
-    {'a': 1, 'b': ddict(c=2, d=ddict(e=3))}
+    {'a': 1, 'b': ddict({'c': 2, 'd': ddict({'e': 3})})}
     >>> conf._of_dict({'a': 1, 'b': {'c': 2, 'd': {'e': 3}}, 'p': 9, 'r': 10})
-    ddict(a=1, b={'c': 2, 'd': {'e': 3}}, p=9, r=10)
+    ddict({'a': 1, 'b': {'c': 2, 'd': {'e': 3}}, 'p': 9, 'r': 10})
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__setattr__("_lock", threading.RLock())
         super().__setattr__("_data", dict())
-        self._update(kwargs)
+        self._update(dict(*args, **kwargs))
 
     def __setattr__(self, k, v):
+        with self._lock:
+            self[k] = v
+
+    def __getattr__(self, k):
+        with self._lock:
+            return self[k]
+
+    def __setitem__(self, k, v):
         with self._lock:
             if k in self.__dict__:
                 raise ValueError(f"Tried to overwrite {k} of {self} by {v}")
             self._data[k] = v
 
-    def __getattr__(self, k):
+    def __getitem__(self, k):
         with self._lock:
             return self._data[k]
 
     def __repr__(self):
-        args = ", ".join(f"{k}={repr(v)}" for k, v in self._data.items())
-        return f"{self.__class__.__name__}({args})"
+        return f"{self.__class__.__name__}({repr(self._data)})"
 
     def _update(self, d):
         with self._lock:
