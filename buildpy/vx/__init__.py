@@ -59,25 +59,57 @@ class DSL:
             self.args.n_serial, self.args.load_average
         )
 
-    def file(self, targets, deps, desc=None, use_hash=None, serial=False, priority=_PRIORITY_DEFAULT):
+    def file(
+            self,
+            targets,
+            deps,
+            desc=None,
+            use_hash=None,
+            serial=False,
+            priority=_PRIORITY_DEFAULT,
+            ty=None,
+            dy=None,
+    ):
         """Declare a file job.
         Arguments:
             use_hash: Use the file checksum in addition to the modification time.
             serial: Jobs declared as `@file(serial=True)` runs exclusively to each other.
                 The argument maybe useful to declare tasks that require a GPU or large amount of memory.
         """
-        if use_hash is None:
-            use_hash = self._use_hash
 
         def _(f):
-            j = _FileJob(f, targets, deps, [desc], use_hash, serial, priority=priority, dsl=self)
+            j = _FileJob(
+                f,
+                targets,
+                deps,
+                [desc],
+                _coalesce(use_hash, self._use_hash),
+                serial,
+                priority=priority,
+                dsl=self,
+                ty=_coalesce(ty, []),
+                dy=_coalesce(dy, []),
+            )
+
             self._update_resource_of_uri(targets, deps, j)
             return _do_nothing
         return _
 
-    def phony(self, target, deps, desc=None, priority=None):
+    def phony(
+            self,
+            target,
+            deps,
+            desc=None,
+            priority=None,
+            ty=None,
+            dy=None,
+    ):
         with self.resource_of_uri_lock:
             if target in self._job_of_target:
+                # ty and dy should be set only once.
+                assert ty is None
+                assert dy is None
+
                 j = self._job_of_target[target]
                 assert j.status == "initial", j
                 j.ds.extend(deps)
@@ -85,8 +117,18 @@ class DSL:
                     j.descs.append(desc)
                 j.priority = priority
             else:
-                j = _PhonyJob(None, [target], deps, [] if desc is None else [desc], priority, dsl=self)
+                j = _PhonyJob(
+                    None,
+                    [target],
+                    deps,
+                    [] if desc is None else [desc],
+                    priority,
+                    dsl=self,
+                    ty=_coalesce(ty, []),
+                    dy=_coalesce(dy, []),
+                )
             self._update_resource_of_uri([target], deps, j)
+
             def _(f):
                 j.f = f
                 return _do_nothing
@@ -331,10 +373,22 @@ class _Job(object):
 
     statuses = ("initial", "invoked", "enqed", "done")
 
-    def __init__(self, f, ts, ds, descs, priority, dsl):
+    def __init__(
+            self,
+            f,
+            ts,
+            ds,
+            descs,
+            priority,
+            dsl,
+            ty,
+            dy,
+    ):
         self._f = f
         self.ts = ts
         self.ds = ds
+        self.ty = _tval.ddict((k, None) for k in ty)
+        self.dy = _tval.ddict((k, None) for k in dy)
         self.descs = descs
         self._priority = priority
         self._dsl = dsl
@@ -500,15 +554,55 @@ class _Job(object):
 
 
 class _PhonyJob(_Job):
-    def __init__(self, f, ts, ds, descs, priority, dsl):
+    def __init__(
+            self,
+            f,
+            ts,
+            ds,
+            descs,
+            priority,
+            dsl,
+            ty,
+            dy,
+    ):
         if len(ts) != 1:
             raise exception.Err(f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}")
-        super().__init__(f, ts, ds, descs, priority, dsl=dsl)
+        super().__init__(
+            f,
+            ts,
+            ds,
+            descs,
+            priority,
+            dsl=dsl,
+            ty=ty,
+            dy=dy,
+        )
 
 
 class _FileJob(_Job):
-    def __init__(self, f, ts, ds, descs, use_hash, serial, priority, dsl):
-        super().__init__(f, ts, ds, descs, priority, dsl=dsl)
+    def __init__(
+            self,
+            f,
+            ts,
+            ds,
+            descs,
+            use_hash,
+            serial,
+            priority,
+            dsl,
+            ty,
+            dy,
+    ):
+        super().__init__(
+            f,
+            ts,
+            ds,
+            descs,
+            priority,
+            dsl=dsl,
+            ty=ty,
+            dy=dy,
+        )
         self._use_hash = use_hash
         self.serial = serial
         self._hash_orig = None
