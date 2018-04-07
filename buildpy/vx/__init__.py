@@ -916,30 +916,6 @@ def _escape(s):
     return "\"" + "".join('\\"' if x == "\"" else x for x in s) + "\""
 
 
-def _key_to_sort_unique_ds(job_of_target, dep):
-    try:
-        return job_of_target[dep].priority
-    except KeyError:
-        return math.inf
-
-
-def _set_unique(d, k, v):
-    if k in d:
-        raise exception.Err(f"{repr(k)} in {repr(d)}")
-    d[k] = v
-    return d
-
-
-def _unique(xs):
-    seen = set()
-    ret = []
-    for x in xs:
-        if x not in seen:
-            ret.append(x)
-            seen.add(x)
-    return ret
-
-
 def mtime_of(uri, use_hash, credential):
     puri = DSL.uriparse(uri)
     if puri.scheme == "file":
