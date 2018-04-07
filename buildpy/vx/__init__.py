@@ -387,12 +387,12 @@ class _Job(object):
         self._f = f
         self.ts = ts
         self.ds = ds
+        self.ds_unique = set(self.ds)
         self.ty = _tval.ddict((k, None) for k in ty)
         self.dy = _tval.ddict((k, None) for k in dy)
         self.descs = descs
         self._priority = priority
         self._dsl = dsl
-        self._ds_made = set()
         self._status = "initial"
         self.executed = False
         self.lock = threading.RLock()
@@ -433,11 +433,6 @@ class _Job(object):
         with self.lock:
             if priority is not None:
                 self._priority = priority
-
-    @property
-    def unique_ds(self):
-        with self.lock:
-            return self._unique_ds
 
     @property
     def dsl(self):
@@ -645,12 +640,12 @@ class _FileJob(_Job):
             t_ts = min(mtime_of(uri=t, use_hash=False, credential=self._credential_of(t)) for t in self.ts)
         except (OSError, google.cloud.exceptions.NotFound, exception.NotFound):
             # Intentionally create hash caches.
-            for d in self.unique_ds:
+            for d in self.ds_unique:
                 self._time_of_dep_from_cache(d)
             return True
         # Intentionally create hash caches.
         # Do not use `any`.
-        return max((self._time_of_dep_from_cache(d) for d in self.unique_ds), default=-float('inf')) > t_ts
+        return max((self._time_of_dep_from_cache(d) for d in self.ds_unique), default=-float('inf')) > t_ts
         # Use of `>` instead of `>=` is intentional.
         # In theory, t_deps < t_targets if targets were made from deps, and thus you might expect ≮ (>=).
         # However, t_deps > t_targets should hold if the deps have modified *after* the creation of the targets.
