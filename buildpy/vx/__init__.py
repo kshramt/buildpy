@@ -405,42 +405,50 @@ class _Job(object):
         return f"{type(self).__name__}({self.ts}, {ds}).status={repr(self.status)}"
 
     def __lt__(self, other):
-        return self.priority < other.priority
+        with self.lock:
+            return self.priority < other.priority
 
     @property
     def f(self):
-        return _coalesce(self._f, _do_nothing)
+        with self.lock:
+            return _coalesce(self._f, _do_nothing)
 
     @f.setter
     def f(self, f):
-        if self._f is None:
-            self._f = f
-        elif self._f == f:
-            pass
-        else:
-            raise exception.Err(f"{self._f} for {self} is overwritten by {f}")
+        with self.lock:
+            if self._f is None:
+                self._f = f
+            elif self._f == f:
+                pass
+            else:
+                raise exception.Err(f"{self._f} for {self} is overwritten by {f}")
 
     @property
     def priority(self):
-        return _coalesce(self._priority, _PRIORITY_DEFAULT)
+        with self.lock:
+            return _coalesce(self._priority, _PRIORITY_DEFAULT)
 
     @priority.setter
     def priority(self, priority):
-        if priority is not None:
-            self._priority = priority
+        with self.lock:
+            if priority is not None:
+                self._priority = priority
 
     @property
     def unique_ds(self):
-        return _unique(self.ds)
+        with self.lock:
+            return self._unique_ds
 
     @property
     def dsl(self):
-        return self._dsl
+        with self.lock:
+            return self._dsl
 
     @property
     def status(self):
-        assert self._status in self.statuses, self
-        return self._status
+        with self.lock:
+            assert self._status in self.statuses, self
+            return self._status
 
     @status.setter
     def status(self, v):
