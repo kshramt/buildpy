@@ -606,7 +606,7 @@ class _PhonyJob(_Job):
 
     def expand_ds(self, ds):
         with self.lock:
-            self.ds.append(ds)
+            self.ds.extend(ds)
             ds = set(ds) - self.ds_unique
             self.ds_unique.update(ds)
             self.ds_rest.update(ds)
