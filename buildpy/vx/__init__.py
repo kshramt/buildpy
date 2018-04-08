@@ -47,6 +47,7 @@ class DSL:
         assert self.args.jobs > 0
         assert self.args.load_average > 0
 
+        logger.setLevel(getattr(logging, self.args.log.upper()))
         self.resource_of_uri = dict()
         self.resource_of_uri_lock = threading.RLock()
         self._job_of_target = _JobOfTarget(self.resource_of_uri, self.resource_of_uri_lock)
@@ -106,15 +107,13 @@ class DSL:
     ):
         with self.resource_of_uri_lock:
             if target in self._job_of_target:
-                # ty and dy should be set only once.
-                assert ty is None
-                assert dy is None
-
                 j = self._job_of_target[target]
                 assert j.status == "initial", j
-                j.ds.extend(deps)
                 if desc is not None:
                     j.descs.append(desc)
+                j.expand_ds(deps)
+                j.expand_ty(_coalesce(ty, []))
+                j.expand_dy(_coalesce(dy, []))
                 j.priority = priority
             else:
                 j = _PhonyJob(
@@ -135,8 +134,6 @@ class DSL:
             return _
 
     def run(self):
-        logger.setLevel(getattr(logging, self.args.log.upper()))
-
         if self.args.descriptions:
             _print_descriptions(self._job_of_target)
         elif self.args.dependencies:
@@ -388,6 +385,7 @@ class _Job(object):
         self.ts = ts
         self.ds = ds
         self.ds_unique = set(self.ds)
+        self.ds_rest = self.ds_unique.copy()
         self.ty = _tval.ddict((k, None) for k in ty)
         self.dy = _tval.ddict((k, None) for k in dy)
         self.descs = descs
@@ -470,15 +468,11 @@ class _Job(object):
     def need_update(self):
         return True
 
-    def ds_rest(self):
-        # todo: scalability issue
-        return set(self.ds) - self._ds_made
-
     def mark_as_made(self, d):
         with self.lock: # 12
             if d is not None:
-                assert d in self.ds, (d, self.ds)
-                self._ds_made.add(d)
+                assert d in self.ds_unique, (d, self)
+                self.ds_rest.discard(d)
 
     def write(self, file=sys.stdout):
         logger.debug(f"{self}")
@@ -506,9 +500,9 @@ class _Job(object):
                 raise exception.Err(f"Must not happen {status} for {self}")
         if status == "initial":
             assert self.status == "invoked"
-            if self.ds:
+            if self.ds_unique:
                 cc = _Cons(self, call_chain)
-                for d in self.ds:
+                for d in self.ds_unique:
                     self.dsl.resource_of_uri[d].invoke(cc)
             else:
                 self.kick()
@@ -529,14 +523,14 @@ class _Job(object):
                 return
             elif self.status == "invoked":
                 self.mark_as_made(uri)
-                if not self.ds_rest():
+                if not self.ds_rest:
                     self._enq()
                 return
             elif self.status == "enqed":
-                assert not self.ds_rest()
+                assert not self.ds_rest
                 return
             elif self.status == "done":
-                assert not self.ds_rest()
+                assert not self.ds_rest
                 return
             else:
                 raise exception.Err("Must not happen: {self}")
@@ -554,6 +548,18 @@ class _Job(object):
         for t in self.ts:
             self.dsl.resource_of_uri[t].kick()
         self.status = "done"
+
+    def set_ty(self, k, v):
+        with self.lock:
+            assert k in self.ty
+            assert self.ty[k] is None
+            self.ty[k] = v
+
+    def set_dy(self, k, v):
+        with self.lock:
+            assert k in self.dy
+            assert self.dy[k] is None
+            self.dy[k] = v
 
 
 class _PhonyJob(_Job):
@@ -580,6 +586,21 @@ class _PhonyJob(_Job):
             ty=ty,
             dy=dy,
         )
+
+    def expand_ds(self, ds):
+        with self.lock:
+            self.ds.append(ds)
+            ds = set(ds) - self.ds_unique
+            self.ds_unique |= ds
+            self.ds_rest |= ds
+
+    def expand_ty(self, ty):
+        with self.lock:
+            _expand_keys(self.ty, ty)
+
+    def expand_dy(self, dy):
+        with self.lock:
+            _expand_keys(self.dy, dy)
 
 
 class _FileJob(_Job):
@@ -725,7 +746,7 @@ class _ThreadPool(object):
                     except queue.Empty:
                         break
                 logger.debug(f"working on {j}")
-                assert not j.ds_rest()
+                assert not j.ds_rest
                 got_error = False
                 need_update = j.need_update()
                 if need_update:
@@ -929,6 +950,12 @@ def _str_of_exception():
 
 def _coalesce(x, default):
     return default if x is None else x
+
+
+def _expand_keys(d, ks):
+    for k in ks:
+        if k not in d:
+            d[k] = None
 
 
 def _do_nothing(*_):
