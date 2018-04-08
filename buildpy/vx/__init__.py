@@ -111,9 +111,9 @@ class DSL:
                 assert j.status == "initial", j
                 if desc is not None:
                     j.descs.append(desc)
-                j.expand_ds(deps)
-                j.expand_ty(_coalesce(ty, []))
-                j.expand_dy(_coalesce(dy, []))
+                j.extend_ds(deps)
+                j.extend_ty(_coalesce(ty, []))
+                j.extend_dy(_coalesce(dy, []))
                 j.priority = priority
             else:
                 j = _PhonyJob(
@@ -604,20 +604,20 @@ class _PhonyJob(_Job):
             dy=dy,
         )
 
-    def expand_ds(self, ds):
+    def extend_ds(self, ds):
         with self.lock:
             self.ds.extend(ds)
             ds = set(ds) - self.ds_unique
             self.ds_unique.update(ds)
             self.ds_rest.update(ds)
 
-    def expand_ty(self, ty):
+    def extend_ty(self, ty):
         with self.lock:
-            _expand_keys(self.ty, ty)
+            _extend_keys(self.ty, ty)
 
-    def expand_dy(self, dy):
+    def extend_dy(self, dy):
         with self.lock:
-            _expand_keys(self.dy, dy)
+            _extend_keys(self.dy, dy)
 
 
 class _FileJob(_Job):
@@ -969,7 +969,7 @@ def _coalesce(x, default):
     return default if x is None else x
 
 
-def _expand_keys(d, ks):
+def _extend_keys(d, ks):
     for k in ks:
         if k not in d:
             d[k] = None
