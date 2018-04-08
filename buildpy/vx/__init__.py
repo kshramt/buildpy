@@ -381,20 +381,22 @@ class _Job(object):
             ty,
             dy,
     ):
+        self.lock = threading.RLock()
+        self._status = "initial"
+        self.executed = False
+        self.serial = False
+
         self._f = f
-        self.ts = ts
-        self.ds = ds
-        self.ds_unique = set(self.ds)
-        self.ds_rest = self.ds_unique.copy()
-        self.ty = _tval.ddict((k, None) for k in ty)
-        self.dy = _tval.ddict((k, None) for k in dy)
+        self.ty = _tval.ddict((k, None) for k in ["_ts"] + ty)
+        self.dy = _tval.ddict((k, None) for k in ["_ds"] + dy)
         self.descs = descs
         self._priority = priority
         self._dsl = dsl
-        self._status = "initial"
-        self.executed = False
-        self.lock = threading.RLock()
-        self.serial = False
+
+        self.ds_unique = set()
+        self.ds_rest = set()
+        self.set_ty("_ts", ts)
+        self.set_dy("_ds", ds)
 
     def __repr__(self):
         ds = self.ds
@@ -420,6 +422,16 @@ class _Job(object):
                 pass
             else:
                 raise exception.Err(f"{self._f} for {self} is overwritten by {f}")
+
+    @property
+    def ts(self):
+        with self.lock:
+            return self.ty._ts
+
+    @property
+    def ds(self):
+        with self.lock:
+            return self.dy._ds
 
     @property
     def priority(self):
@@ -550,16 +562,21 @@ class _Job(object):
         self.status = "done"
 
     def set_ty(self, k, v):
+        logger.debug(f"k={repr(k)}, v={repr(v)}")
         with self.lock:
-            assert k in self.ty
-            assert self.ty[k] is None
+            assert (k in self.ty), self
+            assert self.ty[k] is None, self
             self.ty[k] = v
 
     def set_dy(self, k, v):
         with self.lock:
-            assert k in self.dy
-            assert self.dy[k] is None
+            assert self.status in ("initial", "invoked"), self
+            assert k in self.dy, self
+            assert self.dy[k] is None, self
             self.dy[k] = v
+            dy = set(v) - self.ds_unique
+            self.ds_unique.update(dy)
+            self.ds_rest.update(dy)
 
 
 class _PhonyJob(_Job):
@@ -591,8 +608,8 @@ class _PhonyJob(_Job):
         with self.lock:
             self.ds.append(ds)
             ds = set(ds) - self.ds_unique
-            self.ds_unique |= ds
-            self.ds_rest |= ds
+            self.ds_unique.update(ds)
+            self.ds_rest.update(ds)
 
     def expand_ty(self, ty):
         with self.lock:
