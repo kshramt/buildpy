@@ -112,8 +112,8 @@ class DSL:
                 if desc is not None:
                     j.descs.append(desc)
                 j.extend_ds(deps)
-                j.extend_ty(_coalesce(ty, []))
-                j.extend_dy(_coalesce(dy, []))
+                _extend_keys(j.ty, _coalesce(ty, []))
+                _extend_keys(j.dy, _coalesce(dy, []))
                 j.priority = priority
             else:
                 j = _PhonyJob(
@@ -610,14 +610,6 @@ class _PhonyJob(_Job):
             ds = set(ds) - self.ds_unique
             self.ds_unique.update(ds)
             self.ds_rest.update(ds)
-
-    def extend_ty(self, ty):
-        with self.lock:
-            _extend_keys(self.ty, ty)
-
-    def extend_dy(self, dy):
-        with self.lock:
-            _extend_keys(self.dy, dy)
 
 
 class _FileJob(_Job):
