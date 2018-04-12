@@ -2,6 +2,7 @@ import _thread
 import argparse
 import functools
 import io
+import json
 import logging
 import math
 import os
@@ -139,7 +140,9 @@ class DSL:
         elif self.args.dependencies:
             _print_dependencies(self._job_of_target)
         elif self.args.dependencies_dot:
-            _print_dependencies_dot(self._job_of_target)
+            print(self.dependencies_dot())
+        elif self.args.dependencies_json:
+            print(self.dependencies_json())
         else:
             for target in self.args.targets:
                 logger.debug(f"{target}")
@@ -170,6 +173,12 @@ class DSL:
             return resource.of_scheme[puri.scheme].rm(uri, credential)
         else:
             raise NotImplementedError(f"rm({repr(uri)}) is not supported")
+
+    def dependencies_json(self):
+        return _dependencies_json_of(self._job_of_target)
+
+    def dependencies_dot(self):
+        return _dependencies_dot_of(self._job_of_target)
 
     def _update_resource_of_uri(self, targets, deps, j):
         with self.resource_of_uri_lock:
@@ -868,9 +877,17 @@ def _parse_argv(argv):
     )
     parser.add_argument(
         "-Q", "--dependencies-dot",
-        action="store_true",
-        default=False,
-        help=f"Print dependencies in DOT format, then exit. {os.path.basename(sys.executable)} build.py -Q | dot -Tpdf -Grankdir=LR -Nshape=plaintext -Ecolor='#00000088' >| workflow.pdf",
+        type=str,
+        const="/dev/stdout",
+        nargs="?",
+        help=f"Print dependencies in the DOT format, then exit. {os.path.basename(sys.executable)} build.py -Q | dot -Tpdf -Grankdir=LR -Nshape=plaintext -Ecolor='#00000088' >| workflow.pdf",
+    )
+    parser.add_argument(
+        "-J", "--dependencies-json",
+        type=str,
+        const="/dev/stdout",
+        nargs="?",
+        help=f"Print dependencies in the JSON format, then exit. {os.path.basename(sys.executable)} build.py -J | jq .",
     )
     parser.add_argument(
         "-n", "--dry-run",
@@ -900,31 +917,49 @@ def _print_dependencies(job_of_target):
         j.write()
 
 
-def _print_dependencies_dot(job_of_target):
+def _dependencies_dot_of(job_of_target):
+    data = json.loads(_dependencies_json_of(job_of_target))
+    fp = io.StringIO()
     node_of_name = dict()
     i = 0
     i_cluster = 0
-    print("digraph G{")
-    for j in sorted(set(job_of_target.values()), key=lambda j: j.ts):
+
+    def _flatten(xss):
+        for xs in xss:
+            yield from xs
+
+    print("digraph G{", file=fp)
+    for j in data:
         i += 1
         i_cluster += 1
         action_node = "n" + str(i)
-        print(action_node + "[label=\"○\"]")
-        for name in j.ts:
-            node, i = _node_of(name, node_of_name, i)
-            print(node + "[label=" + _escape(name) + "]")
-            print(node + " -> " + action_node)
+        print(action_node + "[label=\"○\"]", file=fp)
 
-        print(f"subgraph cluster_{i_cluster}{{")
-        for name in j.ts:
-            print(node_of_name[name])
-        print("}")
-
-        for name in j.ds:
+        ts = set(_flatten(j["ty"].values()))
+        for name in ts:
             node, i = _node_of(name, node_of_name, i)
-            print(node + "[label=" + _escape(name) + "]")
-            print(action_node + " -> " + node)
-    print("}")
+            print(node + "[label=" + _escape(name) + "]", file=fp)
+            print(node + " -> " + action_node, file=fp)
+
+        print(f"subgraph cluster_{i_cluster}" "{", file=fp)
+        for name in ts:
+            print(node_of_name[name], file=fp)
+        print("}", file=fp)
+
+        for name in set(_flatten(j["dy"].values())):
+            node, i = _node_of(name, node_of_name, i)
+            print(node + "[label=" + _escape(name) + "]", file=fp)
+            print(action_node + " -> " + node, file=fp)
+    print("}", end="", file=fp)
+    return fp.getvalue()
+
+
+def _dependencies_json_of(job_of_target):
+    return json.dumps(
+        [dict(ty=j.ty._to_dict_rec(), dy=j.dy._to_dict_rec()) for j in sorted(set(job_of_target.values()), key=lambda j: j.ts)],
+        ensure_ascii=False,
+        sort_keys=True,
+    )
 
 
 def _node_of(name, node_of_name, i):
