@@ -946,7 +946,7 @@ def _dependencies_dot_of(job_of_target):
             print(node_of_name[name], file=fp)
         print("}", file=fp)
 
-        for name in set(_flatten(j["dy"].values())):
+        for name in j.ds_unique:
             node, i = _node_of(name, node_of_name, i)
             print(node + "[label=" + _escape(name) + "]", file=fp)
             print(action_node + " -> " + node, file=fp)
