@@ -402,6 +402,7 @@ class _Job(object):
         self._priority = priority
         self._dsl = dsl
 
+        self.ts_unique = set()
         self.ds_unique = set()
         self.ds_rest = set()
         self.set_ty("_ts", ts)
@@ -566,7 +567,7 @@ class _Job(object):
     def kick_ts(self):
         logger.debug(f"{self}")
         assert self.status in ("enqed", "done"), self
-        for t in self.ts:
+        for t in self.ts_unique:
             self.dsl.resource_of_uri[t].kick()
         self.status = "done"
 
@@ -576,6 +577,8 @@ class _Job(object):
             assert (k in self.ty), self
             assert self.ty[k] is None, self
             self.ty[k] = v
+            ty = set(v) - self.ts_unique
+            self.ts_unique.update(ty)
 
     def set_dy(self, k, v):
         with self.lock:
@@ -659,7 +662,7 @@ class _FileJob(_Job):
 
     def rm_targets(self):
         logger.info(f"rm_targets({repr(self.ts)})")
-        for t in self.ts:
+        for t in self.ts_unique:
             meta = self._dsl.resource_of_uri[t]
             if not (("keep" in meta) and meta["keep"]):
                 try:
@@ -676,7 +679,7 @@ class _FileJob(_Job):
 
     def _need_update(self):
         try:
-            t_ts = min(mtime_of(uri=t, use_hash=False, credential=self._credential_of(t)) for t in self.ts)
+            t_ts = min(mtime_of(uri=t, use_hash=False, credential=self._credential_of(t)) for t in self.ts_unique)
         except (OSError, google.cloud.exceptions.NotFound, exception.NotFound):
             # Intentionally create hash caches.
             for d in self.ds_unique:
@@ -913,7 +916,8 @@ def _print_descriptions(job_of_target):
 
 
 def _print_dependencies(job_of_target):
-    for j in sorted(set(job_of_target.values()), key=lambda j: j.ts):
+    # list(j.ts_unique) is used to make tests pass
+    for j in sorted(set(job_of_target.values()), key=lambda j: list(j.ts_unique)):
         j.write()
 
 
@@ -924,10 +928,6 @@ def _dependencies_dot_of(job_of_target):
     i = 0
     i_cluster = 0
 
-    def _flatten(xss):
-        for xs in xss:
-            yield from xs
-
     print("digraph G{", file=fp)
     for j in data:
         i += 1
@@ -935,18 +935,17 @@ def _dependencies_dot_of(job_of_target):
         action_node = "n" + str(i)
         print(action_node + "[label=\"○\"]", file=fp)
 
-        ts = set(_flatten(j["ty"].values()))
-        for name in ts:
+        for name in sorted(set(_flatten1(j["ty"].values()))):
             node, i = _node_of(name, node_of_name, i)
             print(node + "[label=" + _escape(name) + "]", file=fp)
             print(node + " -> " + action_node, file=fp)
 
         print(f"subgraph cluster_{i_cluster}" "{", file=fp)
-        for name in ts:
+        for name in sorted(set(_flatten1(j["ty"].values()))):
             print(node_of_name[name], file=fp)
         print("}", file=fp)
 
-        for name in j.ds_unique:
+        for name in sorted(set(_flatten1(j["dy"].values()))):
             node, i = _node_of(name, node_of_name, i)
             print(node + "[label=" + _escape(name) + "]", file=fp)
             print(action_node + " -> " + node, file=fp)
@@ -956,7 +955,7 @@ def _dependencies_dot_of(job_of_target):
 
 def _dependencies_json_of(job_of_target):
     return json.dumps(
-        [dict(ty=j.ty._to_dict_rec(), dy=j.dy._to_dict_rec()) for j in sorted(set(job_of_target.values()), key=lambda j: j.ts)],
+        [dict(ty=j.ty._to_dict_rec(), dy=j.dy._to_dict_rec()) for j in sorted(set(job_of_target.values()), key=lambda j: j.ts_unique)],
         ensure_ascii=False,
         sort_keys=True,
     )
@@ -1000,6 +999,11 @@ def _extend_keys(d, ks):
     for k in ks:
         if k not in d:
             d[k] = None
+
+
+def _flatten1(xss):
+    for xs in xss:
+        yield from xs
 
 
 def _do_nothing(*_):
