@@ -58,7 +58,7 @@ sh = dsl.sh
 rm = dsl.rm
 
 
-phony("all", "a", desc="Default target")
+phony("all", ["a"], desc="Default target")
 
 @file(["a"], ["b"], desc="Test 2")
 def _(j):
