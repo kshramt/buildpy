@@ -94,7 +94,7 @@ class DSL:
             )
 
             self._update_resource_of_uri(targets, deps, j)
-            return _do_nothing
+            return j
         return _
 
     def phony(
@@ -128,11 +128,7 @@ class DSL:
                     dy=_coalesce(dy, []),
                 )
             self._update_resource_of_uri([target], deps, j)
-
-            def _(f):
-                j.f = f
-                return _do_nothing
-            return _
+            return j
 
     def run(self):
         if self.args.descriptions:
@@ -196,6 +192,7 @@ class DSL:
                 else:
                     r = _Resource(dep, set([j]), None, dsl=self)
                     self.resource_of_uri[dep] = r
+
 
 # Internal use only.
 
@@ -615,6 +612,10 @@ class _PhonyJob(_Job):
             ty=ty,
             dy=dy,
         )
+
+    def __call__(self, f):
+        self.f = f
+        return self
 
     def extend_ds(self, ds):
         with self.lock:
