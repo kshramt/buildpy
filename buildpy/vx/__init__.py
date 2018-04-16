@@ -1004,7 +1004,8 @@ def _extend_keys(d, ks):
 
 def _flatten1(xss):
     for xs in xss:
-        yield from xs
+        if xs:
+            yield from xs
 
 
 def _do_nothing(*_):
