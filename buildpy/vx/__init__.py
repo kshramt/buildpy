@@ -518,6 +518,7 @@ class _Job(object):
         if status == "initial":
             self._invoke(call_chain)
         elif status == "invoked":
+            # A job with dy may be invoked multiple times
             self._invoke(call_chain)
         elif status == "enqed":
             raise exception.Err(f"Must not happen {status} for {self}")
