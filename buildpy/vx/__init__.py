@@ -93,7 +93,7 @@ class DSL:
                 dy=_coalesce(dy, []),
             )
 
-            self._update_resource_of_uri(targets, deps, j)
+            self.update_resource_of_uri(targets, deps, j)
             return j
         return _
 
@@ -127,7 +127,7 @@ class DSL:
                     ty=_coalesce(ty, []),
                     dy=_coalesce(dy, []),
                 )
-            self._update_resource_of_uri([target], deps, j)
+            self.update_resource_of_uri([target], deps, j)
             return j
 
     def run(self):
@@ -176,7 +176,7 @@ class DSL:
     def dependencies_dot(self):
         return _dependencies_dot_of(self.job_of_target)
 
-    def _update_resource_of_uri(self, targets, deps, j):
+    def update_resource_of_uri(self, targets, deps, j):
         with self.resource_of_uri_lock:
             for target in targets:
                 if target in self.resource_of_uri:
