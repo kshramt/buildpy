@@ -963,7 +963,7 @@ def _dependencies_dot_of(job_of_target):
 
 def _dependencies_json_of(job_of_target):
     return json.dumps(
-        [dict(ty=j.ty._to_dict_rec(), dy=j.dy._to_dict_rec()) for j in sorted(set(job_of_target.values()), key=lambda j: list(j.ts_unique))],
+        [dict(ty=j.ty._to_dict_rec(), dy=j.dy._to_dict_rec()) for j in sorted(set(job_of_target.values()), key=lambda j: sorted(j.ts_unique))],
         ensure_ascii=False,
         sort_keys=True,
     )
