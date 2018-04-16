@@ -405,7 +405,7 @@ class _Job(object):
 
     def __repr__(self):
         ds = self.ds
-        if len(self.ds) > 6:
+        if self.ds and (len(self.ds) > 6):
             ds = ds[:3] + [_cdots] + ds[-3:]
         return f"{type(self).__name__}({self.ts}, {ds}).status={repr(self.status)}"
 
@@ -508,7 +508,7 @@ class _Job(object):
             if status == "initial":
                 self.status = "invoked"
             elif status == "invoked":
-                return
+                pass
             elif status == "enqed":
                 return
             elif status == "done":
@@ -516,21 +516,24 @@ class _Job(object):
             else:
                 raise exception.Err(f"Must not happen {status} for {self}")
         if status == "initial":
-            assert self.status == "invoked"
-            if self.ds_unique:
-                cc = _Cons(self, call_chain)
-                for d in self.ds_unique:
-                    self.dsl.resource_of_uri[d].invoke(cc)
-            else:
-                self.kick()
+            self._invoke(call_chain)
         elif status == "invoked":
-            raise exception.Err(f"Must not happen {status} for {self}")
+            self._invoke(call_chain)
         elif status == "enqed":
             raise exception.Err(f"Must not happen {status} for {self}")
         elif status == "done":
             self.kick_ts()
         else:
             raise exception.Err(f"Must not happen {status} for {self}")
+
+    def _invoke(self, call_chain):
+        assert self.status == "invoked"
+        if self.ds_unique:
+            cc = _Cons(self, call_chain)
+            for d in self.ds_unique:
+                self.dsl.resource_of_uri[d].invoke(cc)
+        else:
+            self.kick()
 
     def kick(self, uri=None):
         logger.debug(f"{self}")
@@ -566,15 +569,19 @@ class _Job(object):
         self.status = "done"
 
     def set_ty(self, k, v):
-        logger.debug(f"k={repr(k)}, v={repr(v)}")
+        logger.debug(f"{self} {repr(k)}: {repr(v)}")
         with self.lock:
             assert (k in self.ty), self
             assert self.ty[k] is None, self
             self.ty[k] = v
             ty = set(v) - self.ts_unique
             self.ts_unique.update(ty)
+            self._dsl.update_resource_of_uri(ty, [], self)
+            if self.status == "done":
+                self.kick_ts()
 
     def set_dy(self, k, v):
+        logger.debug(f"{self} {repr(k)}: {repr(v)}")
         with self.lock:
             assert self.status in ("initial", "invoked"), self
             assert k in self.dy, self
@@ -583,6 +590,9 @@ class _Job(object):
             dy = set(v) - self.ds_unique
             self.ds_unique.update(dy)
             self.ds_rest.update(dy)
+            self._dsl.update_resource_of_uri([], dy, self)
+            if self.status == "invoked":
+                self.invoke()
 
 
 class _PhonyJob(_Job):
@@ -654,7 +664,7 @@ class _FileJob(_Job):
 
     def __repr__(self):
         ds = self.ds
-        if len(self.ds) > 6:
+        if self.ds and (len(self.ds) > 6):
             ds = ds[:3] + [_cdots] + ds[-3:]
         return f"{type(self).__name__}({self.ts}, {ds}, serial={self.serial}).status={repr(self.status)}"
 
