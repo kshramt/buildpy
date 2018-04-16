@@ -51,7 +51,7 @@ class DSL:
         logger.setLevel(getattr(logging, self.args.log.upper()))
         self.resource_of_uri = dict()
         self.resource_of_uri_lock = threading.RLock()
-        self._job_of_target = _JobOfTarget(self.resource_of_uri, self.resource_of_uri_lock)
+        self.job_of_target = _JobOfTarget(self.resource_of_uri, self.resource_of_uri_lock)
         self._use_hash = use_hash
         self.time_of_dep_cache = _tval.Cache()
 
@@ -107,8 +107,8 @@ class DSL:
             dy=None,
     ):
         with self.resource_of_uri_lock:
-            if target in self._job_of_target:
-                j = self._job_of_target[target]
+            if target in self.job_of_target:
+                j = self.job_of_target[target]
                 assert j.status == "initial", j
                 if desc is not None:
                     j.descs.append(desc)
@@ -132,9 +132,9 @@ class DSL:
 
     def run(self):
         if self.args.descriptions:
-            _print_descriptions(self._job_of_target)
+            _print_descriptions(self.job_of_target)
         elif self.args.dependencies:
-            _print_dependencies(self._job_of_target)
+            _print_dependencies(self.job_of_target)
         elif self.args.dependencies_dot:
             print(self.dependencies_dot())
         elif self.args.dependencies_json:
@@ -171,10 +171,10 @@ class DSL:
             raise NotImplementedError(f"rm({repr(uri)}) is not supported")
 
     def dependencies_json(self):
-        return _dependencies_json_of(self._job_of_target)
+        return _dependencies_json_of(self.job_of_target)
 
     def dependencies_dot(self):
-        return _dependencies_dot_of(self._job_of_target)
+        return _dependencies_dot_of(self.job_of_target)
 
     def _update_resource_of_uri(self, targets, deps, j):
         with self.resource_of_uri_lock:
