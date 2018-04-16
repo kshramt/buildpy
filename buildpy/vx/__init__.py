@@ -549,9 +549,9 @@ class _Job(object):
             elif self.status == "done":
                 assert None not in self.dy._values()
                 assert not self.ds_rest
-                raise exception.Err("Do not kick a done job: {self}")
+                raise exception.Err(f"Do not kick a done job: {self}")
             else:
-                raise exception.Err("Must not happen: {self}")
+                raise exception.Err(f"Must not happen: {self}")
 
     def _enq(self):
         logger.debug(f"{self}")
