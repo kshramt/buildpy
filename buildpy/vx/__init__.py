@@ -357,10 +357,8 @@ class _Resource(object):
             assert self.status in ("initial", "invoked"), self
             if self.status == "initial":
                 self.status = "done"
-                return
             elif self.status == "invoked":
                 self.kick_ts()
-                return
             else:
                 raise exception.Err(f"Must not happen: {self}")
 
@@ -539,18 +537,14 @@ class _Job(object):
         with self.lock: # 14
             if self.status == "initial":
                 self.mark_as_made(uri)
-                return
             elif self.status == "invoked":
                 self.mark_as_made(uri)
                 if not self.ds_rest:
                     self._enq()
-                return
             elif self.status == "enqed":
                 assert not self.ds_rest
-                return
             elif self.status == "done":
                 assert not self.ds_rest
-                return
             else:
                 raise exception.Err("Must not happen: {self}")
 
