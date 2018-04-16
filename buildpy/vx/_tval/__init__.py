@@ -184,6 +184,10 @@ class ddict(object):
     def __repr__(self):
         return f"{self.__class__.__name__}({repr(self._data)})"
 
+    def _values(self):
+        with self._lock:
+            return self._data.values()
+
     def _update(self, d):
         with self._lock:
             for k, v in d.items():

@@ -265,7 +265,7 @@ class _Resource(object):
         self._status = "initial"
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({repr(self.uri)}).status={self.status}.meta={self.meta}"
+        return f"{self.__class__.__name__}({repr(self.uri)}).status={repr(self.status)}.meta={self.meta}"
 
     @property
     def tjs(self):
@@ -539,12 +539,14 @@ class _Job(object):
                 self.mark_as_made(uri)
             elif self.status == "invoked":
                 self.mark_as_made(uri)
-                if not self.ds_rest:
+                if (None not in self.dy._values()) and (not self.ds_rest):
                     self._enq()
             elif self.status == "enqed":
                 assert not self.ds_rest
             elif self.status == "done":
+                assert None not in self.dy._values()
                 assert not self.ds_rest
+                raise exception.Err("Do not kick a done job: {self}")
             else:
                 raise exception.Err("Must not happen: {self}")
 
@@ -558,6 +560,7 @@ class _Job(object):
     def kick_ts(self):
         logger.debug(f"{self}")
         assert self.status in ("enqed", "done"), self
+        assert None not in self.dy._values()
         for t in self.ts_unique:
             self.dsl.resource_of_uri[t].kick()
         self.status = "done"
