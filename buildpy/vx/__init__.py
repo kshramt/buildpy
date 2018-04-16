@@ -399,7 +399,7 @@ class _Job(object):
 
         self.ts_unique = set()
         self.ds_unique = set()
-        self.ds_rest = set()
+        self.ds_done = set()
         self.set_ty("_ts", ts)
         self.set_dy("_ds", ds)
 
@@ -489,7 +489,7 @@ class _Job(object):
         with self.lock: # 12
             if d is not None:
                 assert d in self.ds_unique, (d, self)
-                self.ds_rest.discard(d)
+                self.ds_done.add(d)
 
     def write(self, file=sys.stdout):
         logger.debug(f"{self}")
@@ -536,6 +536,10 @@ class _Job(object):
         else:
             self.kick()
 
+    def ready(self):
+        # It does not take much time to compare two sets
+        return (None not in self.dy._values()) and (self.ds_done == self.ds_unique)
+
     def kick(self, uri=None):
         logger.debug(f"{self}")
         with self.lock: # 14
@@ -543,13 +547,12 @@ class _Job(object):
                 self.mark_as_made(uri)
             elif self.status == "invoked":
                 self.mark_as_made(uri)
-                if (None not in self.dy._values()) and (not self.ds_rest):
+                if self.ready():
                     self._enq()
             elif self.status == "enqed":
-                assert not self.ds_rest
+                assert self.ready()
             elif self.status == "done":
-                assert None not in self.dy._values()
-                assert not self.ds_rest
+                assert self.ready()
                 raise exception.Err(f"Do not kick a done job: {self}")
             else:
                 raise exception.Err(f"Must not happen: {self}")
@@ -590,7 +593,6 @@ class _Job(object):
             self.dy[k] = v
             dy = set(v) - self.ds_unique
             self.ds_unique.update(dy)
-            self.ds_rest.update(dy)
             self._dsl.update_resource_of_uri([], dy, self)
             if self.status == "invoked":
                 self.invoke()
@@ -630,7 +632,6 @@ class _PhonyJob(_Job):
             self.ds.extend(ds)
             ds = set(ds) - self.ds_unique
             self.ds_unique.update(ds)
-            self.ds_rest.update(ds)
 
 
 class _FileJob(_Job):
@@ -776,7 +777,7 @@ class _ThreadPool(object):
                     except queue.Empty:
                         break
                 logger.debug(f"working on {j}")
-                assert not j.ds_rest
+                assert j.ready()
                 got_error = False
                 need_update = j.need_update()
                 if need_update:
