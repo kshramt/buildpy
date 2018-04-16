@@ -512,7 +512,7 @@ class _Job(object):
             elif status == "enqed":
                 return
             elif status == "done":
-                pass
+                return
             else:
                 raise exception.Err(f"Must not happen {status} for {self}")
         if status == "initial":
@@ -523,7 +523,7 @@ class _Job(object):
         elif status == "enqed":
             raise exception.Err(f"Must not happen {status} for {self}")
         elif status == "done":
-            self.kick_ts()
+            raise exception.Err(f"Must not happen {status} for {self}")
         else:
             raise exception.Err(f"Must not happen {status} for {self}")
 
