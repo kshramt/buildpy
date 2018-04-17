@@ -480,7 +480,6 @@ class _Job(object):
 
     def rm_targets(self):
         assert (self.status == "enqed"), self
-        pass
 
     def need_update(self):
         return True

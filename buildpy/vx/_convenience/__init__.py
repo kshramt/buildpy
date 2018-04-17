@@ -17,6 +17,7 @@ class cd(object):
     __slots__ = ["old", "new"]
 
     def __init__(self, new):
+        self.old = None
         self.new = new
 
     def __call__(self, f):
