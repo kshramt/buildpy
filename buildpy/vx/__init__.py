@@ -797,7 +797,7 @@ class _ThreadPool(object):
                         logger.error(e_str)
                         j.rm_targets()
                         if self._keep_going:
-                            self._deferred_errors.put((j, e_str))
+                            self.deferred_errors.put((j, e_str))
                         else:
                             self._die(e_str)
                     self._n_running.dec()
