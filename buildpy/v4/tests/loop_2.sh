@@ -68,4 +68,4 @@ cat <<EOF >| expected
 1_1
 1_2
 EOF
-colordiff expected actual
+git diff --color-words --no-index --word-diff expected actual

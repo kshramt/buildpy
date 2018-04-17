@@ -90,4 +90,4 @@ EOF
 
 "$PYTHON" build.py > actual
 
-colordiff -u expect actual
+git diff --color-words --no-index --word-diff expect actual

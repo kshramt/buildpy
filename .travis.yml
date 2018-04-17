@@ -14,7 +14,3 @@ script:
 env:
   - FLAGS=-j10
   - FLAGS=-j1
-addons:
-  apt:
-    packages:
-      - colordiff

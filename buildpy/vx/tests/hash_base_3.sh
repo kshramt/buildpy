@@ -80,5 +80,5 @@ EOF
    "$PYTHON" build.py
 } 1> actual.1 2> actual.2
 
-colordiff -u expect.1 actual.1
-colordiff -u expect.2 actual.2
+git diff --color-words --no-index --word-diff expect.1 actual.1
+git diff --color-words --no-index --word-diff expect.2 actual.2
