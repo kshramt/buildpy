@@ -405,8 +405,8 @@ class _Job(object):
 
     def __repr__(self):
         ds = self.ds
-        if self.ds and (len(self.ds) > 6):
-            ds = ds[:3] + [_cdots] + ds[-3:]
+        if self.ds and (len(self.ds) > 4):
+            ds = ds[:2] + [_cdots] + ds[-2:]
         return f"{type(self).__name__}({self.ts}, {ds}).status={repr(self.status)}"
 
     def __lt__(self, other):
@@ -665,8 +665,8 @@ class _FileJob(_Job):
 
     def __repr__(self):
         ds = self.ds
-        if self.ds and (len(self.ds) > 6):
-            ds = ds[:3] + [_cdots] + ds[-3:]
+        if self.ds and (len(self.ds) > 4):
+            ds = ds[:2] + [_cdots] + ds[-2:]
         return f"{type(self).__name__}({self.ts}, {ds}, serial={self.serial}).status={repr(self.status)}"
 
     def rm_targets(self):
@@ -828,7 +828,7 @@ class _ThreadPool(object):
 class CDots(object):
 
     def __repr__(self):
-        return "..."
+        return ".."
 
 
 _cdots = CDots()
