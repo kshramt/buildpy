@@ -116,6 +116,16 @@ dsl.run()
 
 ## News
 
+### v5.0.0
+
+- Add `_Job.data`.
+
+    ```
+    @file(ts, ds, data=dict(params=dict(a=1, b=2)))
+    def this(j):
+        print(j.data.params)
+    ```
+
 ### v4.3.0
 
 - Improve error messages.

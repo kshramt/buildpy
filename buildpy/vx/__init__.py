@@ -71,6 +71,7 @@ class DSL:
             priority=_PRIORITY_DEFAULT,
             ty=None,
             dy=None,
+            data=None,
     ):
         """Declare a file job.
         Arguments:
@@ -78,6 +79,9 @@ class DSL:
             serial: Jobs declared as `@file(serial=True)` runs exclusively to each other.
                 The argument maybe useful to declare tasks that require a GPU or large amount of memory.
         """
+
+        if data is None:
+            data = dict()
 
         def _(f):
             j = _FileJob(
@@ -91,6 +95,7 @@ class DSL:
                 dsl=self,
                 ty=_coalesce(ty, []),
                 dy=_coalesce(dy, []),
+                data=data,
             )
 
             self.update_resource_of_uri(targets, deps, j)
@@ -105,7 +110,11 @@ class DSL:
             priority=None,
             ty=None,
             dy=None,
+            data=None,
     ):
+        if data is None:
+            data = dict()
+
         with self.resource_of_uri_lock:
             if target in self.job_of_target:
                 j = self.job_of_target[target]
@@ -116,6 +125,7 @@ class DSL:
                 _extend_keys(j.ty, _coalesce(ty, []))
                 _extend_keys(j.dy, _coalesce(dy, []))
                 j.priority = priority
+                j.data._update(data)
             else:
                 j = _PhonyJob(
                     None,
@@ -126,6 +136,7 @@ class DSL:
                     dsl=self,
                     ty=_coalesce(ty, []),
                     dy=_coalesce(dy, []),
+                    data=data,
                 )
             self.update_resource_of_uri([target], deps, j)
             return j
@@ -384,6 +395,7 @@ class _Job(object):
             dsl,
             ty,
             dy,
+            data,
     ):
         self.lock = threading.RLock()
         self._status = "initial"
@@ -402,6 +414,9 @@ class _Job(object):
         self.ds_done = set()
         self.set_ty("_ts", ts)
         self.set_dy("_ds", ds)
+
+        # User data.
+        self.data = _tval.ddict(data)
 
     def __repr__(self):
         ds = self.ds
@@ -607,6 +622,7 @@ class _PhonyJob(_Job):
             dsl,
             ty,
             dy,
+            data,
     ):
         if len(ts) != 1:
             raise exception.Err(f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}")
@@ -619,6 +635,7 @@ class _PhonyJob(_Job):
             dsl=dsl,
             ty=ty,
             dy=dy,
+            data=data,
         )
 
     def __call__(self, f):
@@ -644,6 +661,7 @@ class _FileJob(_Job):
             dsl,
             ty,
             dy,
+            data,
     ):
         super().__init__(
             f,
@@ -654,6 +672,7 @@ class _FileJob(_Job):
             dsl=dsl,
             ty=ty,
             dy=dy,
+            data=data,
         )
         self._use_hash = use_hash
         self.serial = serial
