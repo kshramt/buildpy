@@ -553,7 +553,6 @@ class _Job(object):
                 assert self.ready()
             elif self.status == "done":
                 assert self.ready()
-                raise exception.Err(f"Do not kick a done job: {self}")
             else:
                 raise exception.Err(f"Must not happen: {self}")
 
