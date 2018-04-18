@@ -839,7 +839,6 @@ class _ThreadPool(object):
     def _die(self, e):
         logger.critical(e)
         _thread.interrupt_main()
-        sys.exit(e)
 
 
 class CDots(object):
