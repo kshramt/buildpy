@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import os
+import psutil
 import queue
 import shutil
 import sys
@@ -151,10 +152,15 @@ class DSL:
         elif self.args.dependencies_json:
             print(self.dependencies_json())
         else:
-            for target in self.args.targets:
-                logger.debug(f"{target}")
-                self.resource_of_uri[target].invoke()
-            self.thread_pool.wait()
+            try:
+                for target in self.args.targets:
+                    logger.debug(f"{target}")
+                    self.resource_of_uri[target].invoke()
+                self.thread_pool.wait()
+            except KeyboardInterrupt as e:
+                self.thread_pool.stop = True
+                _terminate_subprocesses()
+                raise
             if self.thread_pool.deferred_errors.qsize() > 0:
                 logger.error("Following errors have thrown during the execution")
                 for _ in range(self.thread_pool.deferred_errors.qsize()):
@@ -747,8 +753,11 @@ class _ThreadPool(object):
         self._serial_queue = queue.PriorityQueue()
         self._serial_queue_lock = threading.Semaphore(n_serial_max)
         self._n_running = _tval.TInt(0)
+        self.stop = False
 
     def push_job(self, j):
+        if self.stop:
+            return
         self._enq_job(j)
         with self._threads_loc:
             if (
@@ -780,6 +789,8 @@ class _ThreadPool(object):
     def _worker(self):
         try:
             while True:
+                if self.stop:
+                    break
                 j = None
                 if self._serial_queue_lock.acquire(blocking=False):
                     try:
@@ -838,7 +849,11 @@ class _ThreadPool(object):
 
     def _die(self, e):
         logger.critical(e)
-        _thread.interrupt_main()
+        not_stopped = not self.stop
+        self.stop = True
+        _terminate_subprocesses()
+        if not_stopped:
+            _thread.interrupt_main()
 
 
 class CDots(object):
@@ -1014,6 +1029,12 @@ def _str_of_exception():
     fp = io.StringIO()
     traceback.print_exc(file=fp)
     return fp.getvalue()
+
+
+def _terminate_subprocesses():
+    for p in psutil.Process().children(recursive=True):
+        logger.critical(p)
+        p.terminate()
 
 
 def _coalesce(x, default):
