@@ -33,35 +33,48 @@ import sys
 import buildpy.vx
 
 
+def _setup_logger():
+    import logging
+    logger = logging.getLogger()
+    hdl = logging.StreamHandler(sys.stderr)
+    hdl.setFormatter(logging.Formatter("%(levelname)s\t%(process)d\t%(asctime)s\t%(filename)s\t%(funcName)s\t%(lineno)d\t%(message)s"))
+    logger.addHandler(hdl)
+    logger.setLevel(logging.DEBUG)
+    return logger
+
+
+logger = _setup_logger()
+
+
 os.environ["SHELL"] = "/bin/bash"
 os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL()
+dsl = buildpy.vx.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
 rm = dsl.rm
 
 
-phony("all", "a", desc="Default target")
+phony("all", ["a"], desc="Default target")
 
-@file("a", "b", desc="Test 2")
+@file(["a"], ["b"], desc="Test 2")
 def _(j):
     sh("touch " + " ".join(j.ts))
 
-@file("b", ["c", "d"], desc="Test 1")
+@file(["b"], ["c", "d"], desc="Test 1")
 def _(j):
     sh("touch " + " ".join(j.ts))
 
-@file("d", "e")
+@file(["d"], ["e"])
 def _(j):
     sh("touch " + " ".join(j.ts))
 
 
 if __name__ == '__main__':
-    dsl.main(sys.argv)
+    dsl.run()
 EOF
 
 cat <<EOF > expect
@@ -84,4 +97,4 @@ touch c e
 
 "$PYTHON" build.py -n > actual
 
-colordiff -u expect actual
+git diff --color-words --no-index --word-diff expect actual

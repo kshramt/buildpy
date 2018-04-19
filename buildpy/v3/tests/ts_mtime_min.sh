@@ -77,4 +77,4 @@ touch u1 u2
    "$PYTHON" build.py
 } 2> actual.2
 
-colordiff -u expect.2 actual.2
+git diff --color-words --no-index --word-diff expect.2 actual.2

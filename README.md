@@ -11,10 +11,11 @@ It has following features:
 - Parallel processing (similar to `--jobs` of GNU Make)
 - Checksum-based update scheme (similar to SCons)
 - Job scheduling based on load average (similar to `--load-average` of GNU Make)
-- DOT-formatted output of a dependency graph (similar to `--prereqs` of Rake)
+- DOT-format output of a dependency graph (similar to `--prereqs` of Rake)
 - Deferred error (similar to `--keep-going` of GNU Make)
 - Dry-run (similar to `--dry-run` of GNU Make)
 - Declaration of multiple targets for a single job
+- Versioned API (`buildpy.v1`, `buildpy.v2`, ...)
 
 BuildPy requires Python version ≥ 3.6 and is available from [PyPI](https://pypi.python.org/pypi/buildpy):
 
@@ -34,8 +35,7 @@ import sys
 
 import buildpy.vx
 
-dsl = buildpy.vx.DSL()
-# dsl = buildpy.DSL(use_hash=True) # use the content-based update scheme
+dsl = buildpy.vx.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
@@ -56,14 +56,14 @@ def _(j):
     sh(f"gcc -o {j.ts[0]} {j.ds[0]}")
 
 if __name__ == '__main__':
-    dsl.main(sys.argv)
+    dsl.run()
 ```
 
 Please see [`./build.py`](./build.py) and `buildpy/v*/tests/*.sh` for more examples.
 
 ## Usage
 
-After importing the `buildpy` module, please make a DSL instance by `dsl = buildpy.DSL()`.
+After importing the `buildpy` module, please make a DSL instance by `dsl = buildpy.vx.DSL(sys.argv)`.
 The instance, `dsl`, provides methods to construct a dependency graph and to execute the declared jobs.
 `dsl.file` is used to declare the dependencies and the command to make target files.
 `dsl.file` is used as follows:
@@ -111,10 +111,22 @@ dsl.phony("all", ["libfinalproduct.so"])
 To execute the declared jobs, please add the following line to your `build.py`:
 
 ```py
-dsl.main(sys.argv)
+dsl.run()
 ```
 
 ## News
+
+### v5.0.0
+
+- Kill all subprocesses on a failure (if not `--keep-going`) or SIGINT.
+    This behavior may not be desirable if `buildpy` is used as a library.
+- Add `_Job.data`.
+
+    ```
+    @file(ts, ds, data=dict(params=dict(a=1, b=2)))
+    def this(j):
+        print(j.data.params)
+    ```
 
 ### v4.3.0
 

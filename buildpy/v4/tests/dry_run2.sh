@@ -84,4 +84,4 @@ touch c e
 
 "$PYTHON" build.py -n > actual
 
-colordiff -u expect actual
+git diff --color-words --no-index --word-diff expect actual

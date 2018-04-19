@@ -31,6 +31,7 @@ setup(
     install_requires=[
         "google-cloud-bigquery",
         "google-cloud-storage",
+        "psutil",
     ],
     zip_safe=True,
 )

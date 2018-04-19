@@ -12,7 +12,7 @@ import buildpy.vx
 def _setup_logger():
     logger = logging.getLogger()
     hdl = logging.StreamHandler(sys.stderr)
-    hdl.setFormatter(logging.Formatter("%(levelname)s\t%(process)d\t%(asctime)s\t%(filename)s\t%(funcName)s\t%(lineno)d\t%(message)s"))
+    hdl.setFormatter(logging.Formatter("%(levelname)s %(process)d %(thread)d %(asctime)s %(filename)s %(lineno)d %(funcName)s %(message)s", "%y%m%d%H%M%S"))
     logger.addHandler(hdl)
     logger.setLevel(logging.DEBUG)
     return logger
@@ -24,11 +24,12 @@ logger = _setup_logger()
 os.environ["SHELL"] = "/bin/bash"
 os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
+os.environ["PYTHONPATH"] = os.getcwd() + ((":" + os.environ["PYTHONPATH"]) if "PYTHONPATH" in os.environ else "")
 
 python = os.environ["PYTHON"]
 
 
-dsl = buildpy.vx.DSL(use_hash=True)
+dsl = buildpy.vx.DSL(sys.argv, use_hash=True)
 file = dsl.file
 phony = dsl.phony
 loop = dsl.loop
@@ -73,10 +74,13 @@ def _(v):
     v_test_files = [path for path in v_files if path.startswith(os.path.join("buildpy", v, "tests"))]
     v_py_files = list(set(v_files).intersection(set(buildpy_py_files)))
 
+    phony("check", [f"check-{v}"])
+    phony(f"check-{v}", [])
+
     @loop(path for path in v_test_files if path.endswith(".sh"))
     def _(test_sh):
         test_sh_done = test_sh + ".done"
-        phony("check", [test_sh_done])
+        phony(f"check-{v}", [test_sh_done])
 
         @file([test_sh_done], [test_sh] + v_py_files, desc=f"Test {test_sh}")
         def _(j):
@@ -88,7 +92,7 @@ def _(v):
     @loop(path for path in v_test_files if path.endswith(".py"))
     def _(test_py):
         test_py_done = test_py + ".done"
-        phony("check", [test_py_done])
+        phony(f"check-{v}", [test_py_done])
 
         @file([test_py_done], [test_py] + v_py_files, desc=f"Test {test_py}", priority=-1)
         def _(j):
@@ -99,4 +103,5 @@ def _(v):
 
 
 if __name__ == '__main__':
-    dsl.main(sys.argv)
+    dsl.run()
+    # print(dsl.dependencies_dot())

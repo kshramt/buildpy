@@ -90,4 +90,4 @@ touch u1 u2
 
 "$PYTHON" build.py -P > actual
 
-colordiff expect actual
+git diff --color-words --no-index --word-diff expect actual
