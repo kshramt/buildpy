@@ -118,6 +118,7 @@ dsl.run()
 
 ### v5.0.0
 
+- Dynamic DAG (accessible through `j.ty` and `j.dy`).
 - Kill all subprocesses on a failure (if not `--keep-going`) or SIGINT.
     This behavior may not be desirable if `buildpy` is used as a library.
 - Add `_Job.data`.
