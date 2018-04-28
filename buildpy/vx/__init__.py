@@ -1033,8 +1033,11 @@ def _str_of_exception():
 
 def _terminate_subprocesses():
     for p in psutil.Process().children(recursive=True):
-        logger.critical(p)
-        p.terminate()
+        try:
+            logger.critical(p)
+            p.terminate()
+        except Exception:
+            pass
 
 
 def _coalesce(x, default):
