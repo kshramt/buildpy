@@ -6,7 +6,6 @@ import json
 import logging
 import math
 import os
-import psutil
 import queue
 import shutil
 import sys
@@ -15,6 +14,7 @@ import time
 import traceback
 
 import google.cloud.exceptions
+import psutil
 
 from ._log import logger
 from . import _convenience
