@@ -10,6 +10,7 @@ It has following features:
     - Google Cloud Storage
 - Parallel processing (similar to `--jobs` of GNU Make)
 - Checksum-based update scheme (similar to SCons)
+- Dynamic job declaration
 - Job scheduling based on load average (similar to `--load-average` of GNU Make)
 - DOT-format output of a dependency graph (similar to `--prereqs` of Rake)
 - Deferred error (similar to `--keep-going` of GNU Make)
