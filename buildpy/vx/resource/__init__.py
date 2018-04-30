@@ -154,7 +154,7 @@ class GoogleCloudStorage(Resource):
         t_uri = blob.time_created.timestamp()
         if not use_hash:
             return t_uri
-        return _min_of_t_uri_and_t_cache(t_uri, lambda : blob.md5_hash, puri)
+        return _min_of_t_uri_and_t_cache(t_uri, lambda: blob.md5_hash, puri)
 
     @classmethod
     def _client_of(cls, credential):
@@ -203,7 +203,7 @@ class S3(Resource):
         t_uri = head["LastModified"]
         if not use_hash:
             return t_uri
-        return _min_of_t_uri_and_t_cache(t_uri, lambda : head["ETag"], puri)
+        return _min_of_t_uri_and_t_cache(t_uri, lambda: head["ETag"], puri)
 
     @classmethod
     def _client_of(cls, credential):

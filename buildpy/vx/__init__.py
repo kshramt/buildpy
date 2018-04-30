@@ -705,7 +705,7 @@ class _FileJob(_Job):
     def need_update(self):
         with self.lock:
             assert self.status == "enqed", self
-            if self.dsl.args.dry_run and (len(self.ds_unique) > 0) and any(self.dsl.resource_of_uri[d].dj.executed for d in self.ds_unique):
+            if self.dsl.args.dry_run and self.ds_unique and any(self.dsl.resource_of_uri[d].dj.executed for d in self.ds_unique):
                 return True
             return self._need_update()
 
