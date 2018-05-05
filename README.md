@@ -6,8 +6,8 @@ BuildPy is a workflow engine to manage data analysis pipelines.
 It has following features:
 
 - Integration for
-    - BigQuery
-    - Google Cloud Storage
+    - BigQuery (`"bq://project.dataset.table"`)
+    - Google Cloud Storage (`"gs://bucket/blob"`)
 - Parallel processing (similar to `--jobs` of GNU Make)
 - Checksum-based update scheme (similar to SCons)
 - Dynamic job declaration
@@ -121,7 +121,6 @@ dsl.run()
 
 - Dynamic DAG (accessible through `j.ty` and `j.dy`).
 - Kill all subprocesses on a failure (if not `--keep-going`) or SIGINT.
-    This behavior may not be desirable if `buildpy` is used as a library.
 - Add `_Job.data`.
 
     ```
