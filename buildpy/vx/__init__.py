@@ -938,12 +938,16 @@ def _parse_argv(argv):
         default=False,
         help="Dry-run.",
     )
+    parser.add_argument("--cut", action="append", help="Cut the DAG at the job of the specified resource. You can specify --cut=target multiple times.")
     args = parser.parse_args(argv)
     assert args.jobs > 0
     assert args.n_serial > 0
     assert args.load_average > 0
     if not args.targets:
         args.targets.append("all")
+    if args.cut is None:
+        args.cut = []
+    args.cut = set(args.cut)
     return args
 
 
