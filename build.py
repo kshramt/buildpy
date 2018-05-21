@@ -59,8 +59,6 @@ phony("all", [], desc="The default target")
 @phony("sdist", [], desc="Make a distribution file")
 def _(j):
     sh(f"""
-    git ls-files -z |
-    xargs -0 -n1 echo include >| MANIFEST.in
     {python} setup.py sdist
     """)
 

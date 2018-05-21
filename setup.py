@@ -25,8 +25,20 @@ setup(
         "buildpy.v2",
         "buildpy.v3",
         "buildpy.v4",
+
         "buildpy.v5",
+        "buildpy.v5._convenience",
+        "buildpy.v5._log",
+        "buildpy.v5._tval",
+        "buildpy.v5.exception",
+        "buildpy.v5.resource",
+
         "buildpy.vx",
+        "buildpy.vx._convenience",
+        "buildpy.vx._log",
+        "buildpy.vx._tval",
+        "buildpy.vx.exception",
+        "buildpy.vx.resource",
     ],
     install_requires=[
         "google-cloud-bigquery",
