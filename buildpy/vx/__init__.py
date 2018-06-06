@@ -1038,7 +1038,7 @@ def _str_of_exception():
 def _terminate_subprocesses():
     for p in psutil.Process().children(recursive=True):
         try:
-            logger.critical(p)
+            logger.info(p)
             p.terminate()
         except Exception:
             pass
