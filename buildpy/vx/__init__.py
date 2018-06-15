@@ -55,6 +55,7 @@ class DSL:
         self.job_of_target = _JobOfTarget(self.resource_of_uri, self.resource_of_uri_lock)
         self._use_hash = use_hash
         self.time_of_dep_cache = _tval.Cache()
+        self.cut_phony_jobs = set()
 
         self.thread_pool = _ThreadPool(
             self.resource_of_uri,
@@ -73,6 +74,7 @@ class DSL:
             ty=None,
             dy=None,
             data=None,
+            cut=False,
     ):
         """Declare a file job.
         Arguments:
@@ -80,6 +82,9 @@ class DSL:
             serial: Jobs declared as `@file(serial=True)` runs exclusively to each other.
                 The argument maybe useful to declare tasks that require a GPU or large amount of memory.
         """
+
+        if cut:
+            return
 
         if data is None:
             data = dict()
@@ -112,7 +117,12 @@ class DSL:
             ty=None,
             dy=None,
             data=None,
+            cut=False,
     ):
+        if cut or (target in self.cut_phony_jobs):
+            self.cut_phony_jobs.add(target)
+            return
+
         if data is None:
             data = dict()
 

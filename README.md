@@ -117,6 +117,10 @@ dsl.run()
 
 ## News
 
+### v5.1.0
+
+- Support `cut` argument for `DSL.phony` and `DSL.file`
+
 ### v5.0.0
 
 - Dynamic DAG (accessible through `j.ty` and `j.dy`).
