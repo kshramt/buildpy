@@ -167,7 +167,7 @@ class DSL:
         else:
             try:
                 for target in self.args.targets:
-                    logger.debug(f"{target}")
+                    logger.debug(target)
                     self.resource_of_uri[target].invoke()
                 self.thread_pool.wait()
             except KeyboardInterrupt as e:
@@ -179,7 +179,7 @@ class DSL:
                 for _ in range(self.thread_pool.deferred_errors.qsize()):
                     j, e_str = self.thread_pool.deferred_errors.get()
                     logger.error(e_str)
-                    logger.error(repr(j))
+                    logger.error(j)
                 raise exception.Err("Execution failed.")
 
     def meta(self, uri, **kwargs):
@@ -342,7 +342,7 @@ class _Resource(object):
             return v in self.meta
 
     def invoke(self, call_chain=_nil):
-        logger.debug(f"{self}")
+        logger.debug(self)
         if self in call_chain:
             raise exception.Err(f"A circular dependency detected: {self} for {call_chain}")
         with self.lock: # 9
@@ -382,7 +382,7 @@ class _Resource(object):
             raise exception.Err(f"Must not happen {status} for {self}")
 
     def kick(self):
-        logger.debug(f"{self}")
+        logger.debug(self)
         with self.lock: # 10
             assert self.status in ("initial", "invoked"), self
             if self.status == "initial":
@@ -393,7 +393,7 @@ class _Resource(object):
                 raise exception.Err(f"Must not happen: {self}")
 
     def kick_ts(self):
-        logger.debug(f"{self}")
+        logger.debug(self)
         assert self.status in ("invoked", "done")
         for tj in self.tjs:
             tj.kick(self.uri)
@@ -502,7 +502,7 @@ class _Job(object):
             self._status = v
 
     def execute(self):
-        logger.debug(f"{self}")
+        logger.debug(self)
         with self.lock: # 16
             assert (self.status == "enqed"), self
             assert (not self.executed), self
@@ -525,7 +525,7 @@ class _Job(object):
                 self.ds_done.add(d)
 
     def write(self, file=sys.stdout):
-        logger.debug(f"{self}")
+        logger.debug(self)
         for t in self.ts:
             print(t, file=file)
         for d in self.ds:
@@ -533,7 +533,7 @@ class _Job(object):
         print(file=file)
 
     def invoke(self, call_chain=_nil):
-        logger.debug(f"{self}")
+        logger.debug(self)
         if self in call_chain:
             raise exception.Err(f"A circular dependency detected: {self} for {call_chain}")
         with self.lock: # 13
@@ -574,7 +574,7 @@ class _Job(object):
         return (None not in self.dy._values()) and (self.ds_done == self.ds_unique)
 
     def kick(self, uri=None):
-        logger.debug(f"{self}")
+        logger.debug(self)
         with self.lock: # 14
             if self.status == "initial":
                 self.mark_as_made(uri)
@@ -590,14 +590,14 @@ class _Job(object):
                 raise exception.Err(f"Must not happen: {self}")
 
     def _enq(self):
-        logger.debug(f"{self}")
+        logger.debug(self)
         with self.lock: # 15
             assert self.status == "invoked"
             self.status = "enqed"
         self.dsl.thread_pool.push_job(self)
 
     def kick_ts(self):
-        logger.debug(f"{self}")
+        logger.debug(self)
         assert self.status in ("enqed", "done"), self
         assert None not in self.dy._values()
         for t in self.ts_unique:
@@ -605,7 +605,7 @@ class _Job(object):
         self.status = "done"
 
     def set_ty(self, k, v):
-        logger.debug(f"{self} {repr(k)}: {repr(v)}")
+        logger.debug("%s %s: %s", self, k, v)
         with self.lock:
             assert (k in self.ty), self
             assert self.ty[k] is None, self
@@ -617,7 +617,7 @@ class _Job(object):
                 self.kick_ts()
 
     def set_dy(self, k, v):
-        logger.debug(f"{self} {repr(k)}: {repr(v)}")
+        logger.debug("%s %s: %s", self, k, v)
         with self.lock:
             assert self.status in ("initial", "invoked"), self
             assert k in self.dy, self
@@ -706,14 +706,14 @@ class _FileJob(_Job):
         return f"{type(self).__name__}({self.ts}, {ds}, serial={self.serial}).status={repr(self.status)}"
 
     def rm_targets(self):
-        logger.info(f"rm_targets({repr(self.ts)})")
+        logger.info(f"rm_targets(%s)", self.ts)
         for t in self.ts_unique:
             meta = self._dsl.resource_of_uri[t]
             if not (("keep" in meta) and meta["keep"]):
                 try:
                     self._dsl.rm(t)
                 except (OSError, google.cloud.exceptions.NotFound, exception.NotFound) as e:
-                    logger.info(f"Failed to remove {t}")
+                    logger.info("Failed to remove %s", t)
 
     def need_update(self):
         with self.lock:
@@ -816,7 +816,7 @@ class _ThreadPool(object):
                         j = self._queue.get(block=True, timeout=0.01)
                     except queue.Empty:
                         break
-                logger.debug(f"working on {j}")
+                logger.debug("working on %s", j)
                 assert j.ready()
                 got_error = False
                 need_update = j.need_update()
@@ -833,7 +833,7 @@ class _ThreadPool(object):
                         j.execute()
                     except Exception as e:
                         got_error = True
-                        logger.error(repr(j))
+                        logger.error(j)
                         e_str = _str_of_exception()
                         logger.error(e_str)
                         j.rm_targets()
