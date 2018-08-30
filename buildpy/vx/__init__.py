@@ -29,6 +29,9 @@ __version__ = "5.1.0"
 _PRIORITY_DEFAULT = 0
 
 
+_CDOTS = ".."
+
+
 # Main
 
 class DSL:
@@ -437,7 +440,7 @@ class _Job(object):
     def __repr__(self):
         ds = self.ds
         if self.ds and (len(self.ds) > 4):
-            ds = ds[:2] + [_cdots] + ds[-2:]
+            ds = ds[:2] + [_CDOTS] + ds[-2:]
         return f"{type(self).__name__}({self.ts}, {ds}).status={repr(self.status)}"
 
     def __lt__(self, other):
@@ -699,7 +702,7 @@ class _FileJob(_Job):
     def __repr__(self):
         ds = self.ds
         if self.ds and (len(self.ds) > 4):
-            ds = ds[:2] + [_cdots] + ds[-2:]
+            ds = ds[:2] + [_CDOTS] + ds[-2:]
         return f"{type(self).__name__}({self.ts}, {ds}, serial={self.serial}).status={repr(self.status)}"
 
     def rm_targets(self):
@@ -864,15 +867,6 @@ class _ThreadPool(object):
         _terminate_subprocesses()
         if not_stopped:
             _thread.interrupt_main()
-
-
-class CDots(object):
-
-    def __repr__(self):
-        return ".."
-
-
-_cdots = CDots()
 
 
 def _parse_argv(argv):
