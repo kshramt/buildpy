@@ -97,6 +97,9 @@ class TSet(TVal):
         with self._lock:
             return len(self._val)
 
+    def __iter__(self):
+        return iter(self.val())
+
     def add(self, x):
         with self._lock:
             self._val.add(x)

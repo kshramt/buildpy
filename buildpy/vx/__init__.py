@@ -55,7 +55,8 @@ class DSL:
         logger.setLevel(getattr(logging, self.args.log.upper()))
         self.resource_of_uri = dict()
         self.resource_of_uri_lock = threading.RLock()
-        self.job_of_target = _JobOfTarget(self.resource_of_uri, self.resource_of_uri_lock)
+        self.job_of_target = _tval.TDict()
+        self.jobs = _tval.TSet()
         self._use_hash = use_hash
         self.time_of_dep_cache = _tval.Cache()
         self.cut_phony_jobs = set()
@@ -101,6 +102,7 @@ class DSL:
             dsl=self,
             data=data,
         )
+        self.jobs.add(j)
         return j
 
     def phony(
@@ -128,13 +130,14 @@ class DSL:
             dsl=self,
             data=data,
         )
+        self.jobs.add(j)
         return j
 
     def run(self):
         if self.args.descriptions:
-            _print_descriptions(self.job_of_target)
+            _print_descriptions(self.jobs)
         elif self.args.dependencies:
-            _print_dependencies(self.job_of_target)
+            _print_dependencies(self.jobs)
         elif self.args.dependencies_dot:
             print(self.dependencies_dot())
         elif self.args.dependencies_json:
@@ -176,10 +179,10 @@ class DSL:
             raise NotImplementedError(f"rm({repr(uri)}) is not supported")
 
     def dependencies_json(self):
-        return _dependencies_json_of(self.job_of_target)
+        return _dependencies_json_of(self.jobs)
 
     def dependencies_dot(self):
-        return _dependencies_dot_of(self.job_of_target)
+        return _dependencies_dot_of(self.jobs)
 
     def update_resource_of_uri(self, targets, deps, j):
         with self.resource_of_uri_lock:
@@ -496,7 +499,7 @@ class _Job(object):
         for t in self.ts:
             print(t, file=file)
         for d in self.ds:
-            print("\t" + d, file=file)
+            print("\t", d, sep="", file=file)
         print(file=file)
 
     def invoke(self, call_chain=_nil):
@@ -884,45 +887,45 @@ def _parse_argv(argv):
     return args
 
 
-def _print_descriptions(job_of_target):
-    for target in sorted(job_of_target.keys()):
-        print(target)
-        for desc in job_of_target[target].descs:
-            for l in desc.split("\t"):
-                print("\t" + l)
+def _print_descriptions(jobs):
+    for t, descs in sorted((t, j.descs) for j in jobs for t in j.ts_unique):
+        print(t)
+        for desc in descs:
+            for l in desc.split("\n"):
+                print("\t", l, sep="")
 
 
-def _print_dependencies(job_of_target):
+def _print_dependencies(jobs):
     # list(j.ts_unique) is used to make tests pass
-    for j in sorted(set(job_of_target.values()), key=lambda j: list(j.ts_unique)):
+    for j in sorted(jobs, key=lambda j: list(j.ts_unique)):
         j.write()
 
 
-def _dependencies_dot_of(job_of_target):
-    data = json.loads(_dependencies_json_of(job_of_target))
+def _dependencies_dot_of(jobs):
+    data = json.loads(_dependencies_json_of(jobs))
     fp = io.StringIO()
     node_of_name = dict()
     i = 0
     i_cluster = 0
 
     print("digraph G{", file=fp)
-    for j in data:
+    for datum in data:
         i += 1
         i_cluster += 1
         action_node = "n" + str(i)
         print(action_node + "[label=\"○\"]", file=fp)
 
-        for name in sorted(self.ts_unique):
+        for name in sorted(datum["ts_unique"]):
             node, i = _node_of(name, node_of_name, i)
             print(node + "[label=" + _escape(name) + "]", file=fp)
             print(node + " -> " + action_node, file=fp)
 
         print(f"subgraph cluster_{i_cluster}" "{", file=fp)
-        for name in sorted(self.ts_unique):
+        for name in sorted(datum["ts_unique"]):
             print(node_of_name[name], file=fp)
         print("}", file=fp)
 
-        for name in sorted(self.ds_unique):
+        for name in sorted(datum["ds_unique"]):
             node, i = _node_of(name, node_of_name, i)
             print(node + "[label=" + _escape(name) + "]", file=fp)
             print(action_node + " -> " + node, file=fp)
@@ -930,9 +933,9 @@ def _dependencies_dot_of(job_of_target):
     return fp.getvalue()
 
 
-def _dependencies_json_of(job_of_target):
+def _dependencies_json_of(jobs):
     return json.dumps(
-        [dict(ts=j.ts, ds=j.ds) for j in sorted(set(job_of_target.values()), key=lambda j: sorted(j.ts_unique))],
+        [dict(ts_unique=list(j.ts_unique), ds_unique=list(j.ds_unique)) for j in sorted((j for j in jobs), key=lambda j: list(j.ts_unique))],
         ensure_ascii=False,
         sort_keys=True,
     )
