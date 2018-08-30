@@ -92,24 +92,22 @@ class DSL:
         if data is None:
             data = dict()
 
-        def _(f):
-            j = _FileJob(
-                f,
-                targets,
-                deps,
-                [desc],
-                _coalesce(use_hash, self._use_hash),
-                serial,
-                priority=priority,
-                dsl=self,
-                ty=_coalesce(ty, []),
-                dy=_coalesce(dy, []),
-                data=data,
-            )
+        j = _FileJob(
+            None,
+            targets,
+            deps,
+            [desc],
+            _coalesce(use_hash, self._use_hash),
+            serial,
+            priority=priority,
+            dsl=self,
+            ty=_coalesce(ty, []),
+            dy=_coalesce(dy, []),
+            data=data,
+        )
 
-            self.update_resource_of_uri(targets, deps, j)
-            return j
-        return _
+        self.update_resource_of_uri(targets, deps, j)
+        return j
 
     def phony(
             self,
@@ -443,6 +441,10 @@ class _Job(object):
             ds = ds[:2] + [_CDOTS] + ds[-2:]
         return f"{type(self).__name__}({self.ts}, {ds}).status={repr(self.status)}"
 
+    def __call__(self, f):
+        self.f = f
+        return self
+
     def __lt__(self, other):
         with self.lock:
             return self.priority < other.priority
@@ -656,10 +658,6 @@ class _PhonyJob(_Job):
             dy=dy,
             data=data,
         )
-
-    def __call__(self, f):
-        self.f = f
-        return self
 
     def extend_ds(self, ds):
         with self.lock:
