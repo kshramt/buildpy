@@ -101,8 +101,6 @@ class DSL:
             dsl=self,
             data=data,
         )
-
-        self.update_resource_of_uri(targets, deps, j)
         return j
 
     def phony(
@@ -121,18 +119,16 @@ class DSL:
         if data is None:
             data = dict()
 
-        with self.resource_of_uri_lock:
-            j = _PhonyJob(
-                None,
-                [target],
-                deps,
-                [] if desc is None else [desc],
-                priority,
-                dsl=self,
-                data=data,
-            )
-            self.update_resource_of_uri([target], deps, j)
-            return j
+        j = _PhonyJob(
+            None,
+            [target],
+            deps,
+            [] if desc is None else [desc],
+            priority,
+            dsl=self,
+            data=data,
+        )
+        return j
 
     def run(self):
         if self.args.descriptions:
