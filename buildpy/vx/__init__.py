@@ -74,8 +74,6 @@ class DSL:
             use_hash=None,
             serial=False,
             priority=_PRIORITY_DEFAULT,
-            ty=None,
-            dy=None,
             data=None,
             cut=False,
     ):
@@ -101,8 +99,6 @@ class DSL:
             serial,
             priority=priority,
             dsl=self,
-            ty=_coalesce(ty, []),
-            dy=_coalesce(dy, []),
             data=data,
         )
 
@@ -115,8 +111,6 @@ class DSL:
             deps,
             desc=None,
             priority=None,
-            ty=None,
-            dy=None,
             data=None,
             cut=False,
     ):
@@ -135,8 +129,6 @@ class DSL:
                 [] if desc is None else [desc],
                 priority,
                 dsl=self,
-                ty=_coalesce(ty, []),
-                dy=_coalesce(dy, []),
                 data=data,
             )
             self.update_resource_of_uri([target], deps, j)
@@ -399,8 +391,6 @@ class _Job(object):
             descs,
             priority,
             dsl,
-            ty,
-            dy,
             data,
     ):
         self.lock = threading.RLock()
@@ -409,17 +399,17 @@ class _Job(object):
         self.serial = False
 
         self._f = f
-        self.ty = _tval.ddict((k, None) for k in ["_ts"] + ty)
-        self.dy = _tval.ddict((k, None) for k in ["_ds"] + dy)
+        self.ts = ts
+        self.ds = ds
         self.descs = descs
         self._priority = priority
         self._dsl = dsl
 
-        self.ts_unique = set()
-        self.ds_unique = set()
+        self.ts_unique = set(self.ts)
+        self.ds_unique = set(self.ds)
         self.ds_done = set()
-        self.set_ty("_ts", ts)
-        self.set_dy("_ds", ds)
+
+        self._dsl.update_resource_of_uri(self.ts_unique, self.ds_unique, self)
 
         # User data.
         self.data = _tval.ddict(data)
@@ -452,16 +442,6 @@ class _Job(object):
                 pass
             else:
                 raise exception.Err(f"{self._f} for {self} is overwritten by {f}")
-
-    @property
-    def ts(self):
-        with self.lock:
-            return self.ty._ts
-
-    @property
-    def ds(self):
-        with self.lock:
-            return self.dy._ds
 
     @property
     def priority(self):
@@ -562,7 +542,7 @@ class _Job(object):
 
     def ready(self):
         # It does not take much time to compare two sets
-        return (None not in self.dy._values()) and (self.ds_done == self.ds_unique)
+        return self.ds_done == self.ds_unique
 
     def kick(self, uri=None):
         logger.debug(self)
@@ -590,35 +570,9 @@ class _Job(object):
     def kick_ts(self):
         logger.debug(self)
         assert self.status in ("enqed", "done"), self
-        assert None not in self.dy._values()
         for t in self.ts_unique:
             self.dsl.resource_of_uri[t].kick()
         self.status = "done"
-
-    def set_ty(self, k, v):
-        logger.debug("%s %s: %s", self, k, v)
-        with self.lock:
-            assert (k in self.ty), self
-            assert self.ty[k] is None, self
-            self.ty[k] = v
-            ty = set(v) - self.ts_unique
-            self.ts_unique.update(ty)
-            self._dsl.update_resource_of_uri(ty, [], self)
-            if self.status == "done":
-                self.kick_ts()
-
-    def set_dy(self, k, v):
-        logger.debug("%s %s: %s", self, k, v)
-        with self.lock:
-            assert self.status in ("initial", "invoked"), self
-            assert k in self.dy, self
-            assert self.dy[k] is None, self
-            self.dy[k] = v
-            dy = set(v) - self.ds_unique
-            self.ds_unique.update(dy)
-            self._dsl.update_resource_of_uri([], dy, self)
-            if self.status == "invoked":
-                self.invoke()
 
 
 class _PhonyJob(_Job):
@@ -630,8 +584,6 @@ class _PhonyJob(_Job):
             descs,
             priority,
             dsl,
-            ty,
-            dy,
             data,
     ):
         if len(ts) != 1:
@@ -643,8 +595,6 @@ class _PhonyJob(_Job):
             descs,
             priority,
             dsl=dsl,
-            ty=ty,
-            dy=dy,
             data=data,
         )
 
@@ -665,8 +615,6 @@ class _FileJob(_Job):
             serial,
             priority,
             dsl,
-            ty,
-            dy,
             data,
     ):
         super().__init__(
@@ -676,8 +624,6 @@ class _FileJob(_Job):
             descs,
             priority,
             dsl=dsl,
-            ty=ty,
-            dy=dy,
             data=data,
         )
         self._use_hash = use_hash
@@ -970,17 +916,17 @@ def _dependencies_dot_of(job_of_target):
         action_node = "n" + str(i)
         print(action_node + "[label=\"○\"]", file=fp)
 
-        for name in sorted(set(_flatten1(j["ty"].values()))):
+        for name in sorted(self.ts_unique):
             node, i = _node_of(name, node_of_name, i)
             print(node + "[label=" + _escape(name) + "]", file=fp)
             print(node + " -> " + action_node, file=fp)
 
         print(f"subgraph cluster_{i_cluster}" "{", file=fp)
-        for name in sorted(set(_flatten1(j["ty"].values()))):
+        for name in sorted(self.ts_unique):
             print(node_of_name[name], file=fp)
         print("}", file=fp)
 
-        for name in sorted(set(_flatten1(j["dy"].values()))):
+        for name in sorted(self.ds_unique):
             node, i = _node_of(name, node_of_name, i)
             print(node + "[label=" + _escape(name) + "]", file=fp)
             print(action_node + " -> " + node, file=fp)
@@ -990,7 +936,7 @@ def _dependencies_dot_of(job_of_target):
 
 def _dependencies_json_of(job_of_target):
     return json.dumps(
-        [dict(ty=j.ty._to_dict_rec(), dy=j.dy._to_dict_rec()) for j in sorted(set(job_of_target.values()), key=lambda j: sorted(j.ts_unique))],
+        [dict(ts=j.ts, ds=j.ds) for j in sorted(set(job_of_target.values()), key=lambda j: sorted(j.ts_unique))],
         ensure_ascii=False,
         sort_keys=True,
     )
