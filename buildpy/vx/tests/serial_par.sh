@@ -48,6 +48,9 @@ rm = dsl.rm
 loop = dsl.loop
 
 
+all_jobs = []
+
+
 @file(["aa"], ["bb"])
 def _(j):
     pass
@@ -68,7 +71,10 @@ def _(x):
         def _(j):
             time.sleep(1)
             sh(f"touch {j.ts[0]}")
-        phony("all", [t])
+        all_jobs.append(t)
+
+
+phony("all", all_jobs)
 
 
 if __name__ == '__main__':

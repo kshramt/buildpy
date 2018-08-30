@@ -47,12 +47,17 @@ sh = dsl.sh
 rm = dsl.rm
 
 
+all_jobs = []
+
+
 @loop((i for i in range(2)), [j for j in range(3)])
 def _(i, j):
-    phony("all", [f"{i}_{j}"])
+    all_jobs.append(f"{i}_{j}")
     @phony(f"{i}_{j}", [])
     def _(j):
         print(j.ts[0])
+
+phony("all", all_jobs)
 
 
 if __name__ == '__main__':

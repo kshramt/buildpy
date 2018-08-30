@@ -128,28 +128,17 @@ class DSL:
             data = dict()
 
         with self.resource_of_uri_lock:
-            if target in self.job_of_target:
-                j = self.job_of_target[target]
-                assert j.status == "initial", j
-                if desc is not None:
-                    j.descs.append(desc)
-                j.extend_ds(deps)
-                _extend_keys(j.ty, _coalesce(ty, []))
-                _extend_keys(j.dy, _coalesce(dy, []))
-                j.priority = priority
-                j.data._update(data)
-            else:
-                j = _PhonyJob(
-                    None,
-                    [target],
-                    deps,
-                    [] if desc is None else [desc],
-                    priority,
-                    dsl=self,
-                    ty=_coalesce(ty, []),
-                    dy=_coalesce(dy, []),
-                    data=data,
-                )
+            j = _PhonyJob(
+                None,
+                [target],
+                deps,
+                [] if desc is None else [desc],
+                priority,
+                dsl=self,
+                ty=_coalesce(ty, []),
+                dy=_coalesce(dy, []),
+                data=data,
+            )
             self.update_resource_of_uri([target], deps, j)
             return j
 
