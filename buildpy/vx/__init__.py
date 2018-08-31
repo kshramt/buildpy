@@ -95,7 +95,7 @@ class DSL:
             None,
             targets,
             deps,
-            [desc],
+            desc,
             _coalesce(use_hash, self._use_hash),
             serial,
             priority=priority,
@@ -125,7 +125,7 @@ class DSL:
             None,
             [target],
             deps,
-            [] if desc is None else [desc],
+            desc,
             priority,
             dsl=self,
             data=data,
@@ -387,7 +387,7 @@ class _Job(object):
             f,
             ts,
             ds,
-            descs,
+            desc,
             priority,
             dsl,
             data,
@@ -400,7 +400,7 @@ class _Job(object):
         self._f = f
         self.ts = ts
         self.ds = ds
-        self.descs = descs
+        self.desc = desc
         self.priority = priority
         self.dsl = dsl
 
@@ -564,7 +564,7 @@ class _PhonyJob(_Job):
             f,
             ts,
             ds,
-            descs,
+            desc,
             priority,
             dsl,
             data,
@@ -575,7 +575,7 @@ class _PhonyJob(_Job):
             f,
             ts,
             ds,
-            descs,
+            desc,
             priority,
             dsl=dsl,
             data=data,
@@ -593,7 +593,7 @@ class _FileJob(_Job):
             f,
             ts,
             ds,
-            descs,
+            desc,
             use_hash,
             serial,
             priority,
@@ -604,7 +604,7 @@ class _FileJob(_Job):
             f,
             ts,
             ds,
-            descs,
+            desc,
             priority,
             dsl=dsl,
             data=data,
@@ -872,9 +872,9 @@ def _parse_argv(argv):
 
 
 def _print_descriptions(jobs):
-    for t, descs in sorted((t, j.descs) for j in jobs for t in j.ts_unique):
+    for t, desc in sorted((t, j.desc) for j in jobs for t in j.ts_unique):
         print(t)
-        for desc in descs:
+        if desc is not None:
             for l in desc.split("\n"):
                 print("\t", l, sep="")
 
