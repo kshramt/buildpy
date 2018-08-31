@@ -110,7 +110,7 @@ class DSL:
             target,
             deps,
             desc=None,
-            priority=None,
+            priority=_PRIORITY_DEFAULT,
             data=None,
             cut=False,
     ):
@@ -401,14 +401,14 @@ class _Job(object):
         self.ts = ts
         self.ds = ds
         self.descs = descs
-        self._priority = priority
-        self._dsl = dsl
+        self.priority = priority
+        self.dsl = dsl
 
         self.ts_unique = set(self.ts)
         self.ds_unique = set(self.ds)
         self.ds_done = set()
 
-        self._dsl.update_resource_of_uri(self.ts_unique, self.ds_unique, self)
+        self.dsl.update_resource_of_uri(self.ts_unique, self.ds_unique, self)
 
         # User data.
         self.data = _tval.ddict(data)
@@ -441,22 +441,6 @@ class _Job(object):
                 pass
             else:
                 raise exception.Err(f"{self._f} for {self} is overwritten by {f}")
-
-    @property
-    def priority(self):
-        with self.lock:
-            return _coalesce(self._priority, _PRIORITY_DEFAULT)
-
-    @priority.setter
-    def priority(self, priority):
-        with self.lock:
-            if priority is not None:
-                self._priority = priority
-
-    @property
-    def dsl(self):
-        with self.lock:
-            return self._dsl
 
     @property
     def status(self):
@@ -640,10 +624,10 @@ class _FileJob(_Job):
     def rm_targets(self):
         logger.info(f"rm_targets(%s)", self.ts)
         for t in self.ts_unique:
-            meta = self._dsl.resource_of_uri[t]
+            meta = self.dsl.resource_of_uri[t]
             if not (("keep" in meta) and meta["keep"]):
                 try:
-                    self._dsl.rm(t)
+                    self.dsl.rm(t)
                 except (OSError, google.cloud.exceptions.NotFound, exception.NotFound) as e:
                     logger.info("Failed to remove %s", t)
 
@@ -675,10 +659,10 @@ class _FileJob(_Job):
         """
         Return: the last hash time.
         """
-        return self._dsl.time_of_dep_cache.get(d, functools.partial(mtime_of, uri=d, use_hash=self._use_hash, credential=self._credential_of(d)))
+        return self.dsl.time_of_dep_cache.get(d, functools.partial(mtime_of, uri=d, use_hash=self._use_hash, credential=self._credential_of(d)))
 
     def _credential_of(self, uri):
-        meta = self._dsl.resource_of_uri[uri]
+        meta = self.dsl.resource_of_uri[uri]
         return meta["credential"] if "credential" in meta else None
 
 
