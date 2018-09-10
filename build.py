@@ -92,7 +92,7 @@ def _(v):
         test_py_done = test_py + ".done"
         check_v_jobs.append(test_py_done)
 
-        @file([test_py_done], [test_py] + v_py_files, desc=f"Test {test_py}", priority=-1)
+        @file([test_py_done], [test_py] + v_py_files, desc=f"Test {test_py}")
         def _(j):
             sh(f"""
             {python} {j.ds[0]}
