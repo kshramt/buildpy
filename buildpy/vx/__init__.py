@@ -56,7 +56,6 @@ class DSL:
         self.jobs = _tval.TSet()
         self._use_hash = use_hash
         self.time_of_dep_cache = _tval.Cache()
-        self.cut_phony_jobs = set()
 
         self.thread_pool = _ThreadPool(
             self.resource_of_uri,
@@ -108,8 +107,7 @@ class DSL:
             data=None,
             cut=False,
     ):
-        if cut or (target in self.cut_phony_jobs):
-            self.cut_phony_jobs.add(target)
+        if cut:
             return
 
         if data is None:
