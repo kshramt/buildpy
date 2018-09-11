@@ -56,6 +56,7 @@ class DSL:
         self.jobs = _tval.TSet()
         self._use_hash = use_hash
         self.time_of_dep_cache = _tval.Cache()
+        self.metadata = _tval.TDefaultDict()
 
         self.thread_pool = _ThreadPool(
             self.resource_of_uri,
@@ -152,15 +153,13 @@ class DSL:
                 raise exception.Err("Execution failed.")
 
     def meta(self, uri, **kwargs):
-        r = self.resource_of_uri[uri]
-        for k, v in kwargs.items():
-            r[k] = v
+        self.metadata[uri] = kwargs
         return uri
 
     def rm(self, uri):
         logger.info(uri)
         puri = self.uriparse(uri)
-        meta = self.resource_of_uri[uri]
+        meta = self.metadata[uri]
         credential = meta["credential"] if "credential" in meta else None
         if puri.scheme == "file":
             assert (puri.netloc == "localhost"), puri
@@ -260,11 +259,10 @@ class _Resource(object):
         self._tjs = tjs
         self._dj = dj
         self.dsl = dsl
-        self.meta = dict()
         self._status = "initial"
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({repr(self.uri)}).status={repr(self.status)}.meta={self.meta}"
+        return f"{self.__class__.__name__}({repr(self.uri)}).status={repr(self.status)}"
 
     @property
     def tjs(self):
@@ -295,20 +293,6 @@ class _Resource(object):
     def add_tjs(self, tj):
         with self.lock: # 5
             self._tjs.add(tj)
-
-    def __getitem__(self, k):
-        with self.lock: # 6
-            return self.meta[k]
-
-    def __setitem__(self, k, v):
-        with self.lock: # 7
-            if (k in self.meta) and (self.meta[k] != v):
-                raise exception.Err(f"Tried to overwrite {self}[{repr(k)}] = {self.meta[k]} by {v}")
-            self.meta[k] = v
-
-    def __contains__(self, v):
-        with self.lock: # 8
-            return v in self.meta
 
     def invoke(self, call_chain=_nil):
         logger.debug(self)
@@ -605,7 +589,7 @@ class _FileJob(_Job):
     def rm_targets(self):
         logger.info(f"rm_targets(%s)", self.ts)
         for t in self.ts_unique:
-            meta = self.dsl.resource_of_uri[t]
+            meta = self.dsl.metadata[t]
             if not (("keep" in meta) and meta["keep"]):
                 try:
                     self.dsl.rm(t)
@@ -643,7 +627,7 @@ class _FileJob(_Job):
         return self.dsl.time_of_dep_cache.get(d, functools.partial(mtime_of, uri=d, use_hash=self._use_hash, credential=self._credential_of(d)))
 
     def _credential_of(self, uri):
-        meta = self.dsl.resource_of_uri[uri]
+        meta = self.dsl.metadata[uri]
         return meta["credential"] if "credential" in meta else None
 
 

@@ -1,3 +1,4 @@
+import collections
 import threading
 
 
@@ -62,6 +63,13 @@ class TDict(object):
     def setdefault(self, k, default=None):
         with self.lock:
             return self.data.setdefault(k, default)
+
+
+class TDefaultDict(TDict):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self.data = collections.defaultdict(dict)
 
 
 class Cache:
