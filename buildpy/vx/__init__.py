@@ -656,7 +656,7 @@ class _ThreadPool(object):
         with self._threads_loc:
             if (
                     len(self._threads) < 1 or (
-                        len(self._threads) < self._n_max and
+                        len(self._threads) <= self._n_max and
                         os.getloadavg()[0] <= self._load_average
                     )
             ):
