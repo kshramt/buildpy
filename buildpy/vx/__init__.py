@@ -26,6 +26,9 @@ from . import resource
 __version__ = "5.1.0"
 
 
+_PRIORITY_DEFAULT = 0
+
+
 _CDOTS = ".."
 
 
@@ -71,6 +74,7 @@ class DSL:
             desc=None,
             use_hash=None,
             serial=False,
+            priority=_PRIORITY_DEFAULT,
             data=None,
             cut=False,
     ):
@@ -94,6 +98,7 @@ class DSL:
             desc,
             _coalesce(use_hash, self._use_hash),
             serial,
+            priority=priority,
             dsl=self,
             data=data,
         )
@@ -105,6 +110,7 @@ class DSL:
             target,
             deps,
             desc=None,
+            priority=_PRIORITY_DEFAULT,
             data=None,
             cut=False,
     ):
@@ -119,6 +125,7 @@ class DSL:
             [target],
             deps,
             desc,
+            priority,
             dsl=self,
             data=data,
         )
@@ -363,6 +370,7 @@ class _Job(object):
             ts,
             ds,
             desc,
+            priority,
             dsl,
             data,
     ):
@@ -375,6 +383,7 @@ class _Job(object):
         self.ts = ts
         self.ds = ds
         self.desc = desc
+        self.priority = priority
         self.dsl = dsl
 
         self.ts_unique = set(self.ts)
@@ -395,6 +404,10 @@ class _Job(object):
     def __call__(self, f):
         self.f = f
         return self
+
+    def __lt__(self, other):
+        with self.lock:
+            return self.priority < other.priority
 
     @property
     def f(self):
@@ -534,6 +547,7 @@ class _PhonyJob(_Job):
             ts,
             ds,
             desc,
+            priority,
             dsl,
             data,
     ):
@@ -544,6 +558,7 @@ class _PhonyJob(_Job):
             ts,
             ds,
             desc,
+            priority,
             dsl=dsl,
             data=data,
         )
@@ -563,6 +578,7 @@ class _FileJob(_Job):
             desc,
             use_hash,
             serial,
+            priority,
             dsl,
             data,
     ):
@@ -571,6 +587,7 @@ class _FileJob(_Job):
             ts,
             ds,
             desc,
+            priority,
             dsl=dsl,
             data=data,
         )
@@ -643,8 +660,8 @@ class _ThreadPool(object):
         self._threads = _tval.TSet()
         self._unwaited_threads = _tval.TSet()
         self._threads_loc = threading.RLock()
-        self._queue = queue.Queue()
-        self._serial_queue = queue.Queue()
+        self._queue = queue.PriorityQueue()
+        self._serial_queue = queue.PriorityQueue()
         self._serial_queue_lock = threading.Semaphore(n_serial_max)
         self._n_running = _tval.TInt(0)
         self.stop = False
