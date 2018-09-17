@@ -750,6 +750,93 @@ class _ThreadPool(object):
             _thread.interrupt_main()
 
 
+class _TaskContext:
+
+    def __init__(self, q=queue.Queue):
+        self.stop = False
+
+        self.queue = q()
+        self._th = threading.Thread(target=self._loop, daemon=True)
+        self._th.start()
+
+    def task(self, f):
+        return _Task(self, f)
+
+    def _loop(self):
+        while not self.stop:
+            task = self.queue.get(block=True)
+            try:
+                if not next(task):
+                    task.put()
+            except StopIteration:
+                pass
+
+
+class _Task:
+
+    def __init__(self, ctx, f):
+        self._ctx = ctx
+        # `f` should behave as if a generator.
+        self._g = iter(f(self))
+
+        self.value = None
+        self.error = None
+        self._waited = queue.Queue()
+        self._done = threading.Event()
+
+        self.put()
+
+    def __repr__(self):
+        return f"{self.__class__.__name__} {self._g}"
+
+    def __next__(self):
+        if self._done.is_set():
+            raise StopIteration
+        try:
+            return next(self._g)
+        except StopIteration as e:
+            self._done.set()
+            self.value = e.value
+            self._put_waited()
+            raise
+        except Exception as e:
+            self._done.set()
+            self.error = e
+            raise
+
+    def __iter__(self):
+        return self
+
+    def wait(self, child=None):
+        """
+        def f(self):
+            child = ...
+            yield self.wait(child)
+
+        f.wait()
+        """
+        if child is None:
+            self._done.wait()
+            return self
+        else:
+            # I do not need lock here since the `yield self.wait(child)` pattern does not occur in another thread.
+            if child._done.is_set():
+                return None  # switch = bool(None)
+            child._waited.put(self)
+            return self  # switch = bool(self)
+
+    def put(self):
+        self._ctx.queue.put(self)
+
+    def _put_waited(self):
+        assert self._done.is_set(), self
+        while True:
+            try:
+                self._waited.get(block=False).put()
+            except queue.Empty:
+                break
+
+
 def _parse_argv(argv):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(

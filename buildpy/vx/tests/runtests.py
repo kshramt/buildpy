@@ -23,6 +23,31 @@ def main(argv):
 
     @buildpy.vx.DSL.let
     def _():
+        ctx = buildpy.vx._TaskContext()
+        outs = []
+
+        @ctx.task
+        def f(self):
+            outs.append(1)
+            yield
+            outs.append(2)
+            yield
+            outs.append(3)
+
+        @ctx.task
+        def g(self):
+            yield self.wait(f)
+            outs.append(4)
+
+        @ctx.task
+        def h(self):
+            yield self.wait(g)
+
+        h.wait()
+        assert outs == [1, 2, 3, 4], outs
+
+    @buildpy.vx.DSL.let
+    def _():
         s = buildpy.vx._tval.TSet()
         s.add(s.add(s.add(1)))
         assert len(s) == 2
