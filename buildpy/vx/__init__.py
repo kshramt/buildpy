@@ -1037,17 +1037,5 @@ def _coalesce(x, default):
     return default if x is None else x
 
 
-def _extend_keys(d, ks):
-    for k in ks:
-        if k not in d:
-            d[k] = None
-
-
-def _flatten1(xss):
-    for xs in xss:
-        if xs:
-            yield from xs
-
-
 def _do_nothing(*_):
     pass
