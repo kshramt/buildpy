@@ -436,6 +436,8 @@ class _FileJob(_Job):
 
 
 class _ThreadPool(object):
+    # todo: Replace me with concurrent.futures.
+
     def __init__(self, job_of_target, keep_going, n_max, n_serial_max, load_average):
         assert n_max > 0
         assert n_serial_max > 0
@@ -549,6 +551,7 @@ class _ThreadPool(object):
 
 
 class _TaskContext:
+    # todo: Replace me with asyncio if possible. Not sure about thread safety of asyncio.
 
     def __init__(self):
         self.stop = False
