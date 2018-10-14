@@ -734,8 +734,8 @@ def _print_descriptions(jobs):
 
 
 def _print_dependencies(jobs):
-    # list(j.ts_unique) is used to make tests pass
-    for j in sorted(jobs, key=lambda j: list(j.ts_unique)):
+    # sorted(j.ts_unique) is used to make the output deterministic
+    for j in sorted(jobs, key=lambda j: sorted(j.ts_unique)):
         j.write()
 
 
