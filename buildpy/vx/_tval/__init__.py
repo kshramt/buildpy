@@ -18,7 +18,7 @@ class TVal:
             return self._val
 
 
-class TDict(object):
+class TDict:
 
     def __init__(self, *args, **kwargs):
         self.data = dict(*args, **kwargs)
@@ -138,7 +138,7 @@ class TInt(TVal):
             self._val -= 1
 
 
-class ddict(object):
+class ddict:
     """
     >>> conf = ddict()
     >>> conf.z = 99
