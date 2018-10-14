@@ -250,7 +250,7 @@ class _Job(object):
     def __repr__(self):
         ds = self.ds
         if self.ds and (len(self.ds) > 4):
-            ds = ds[:2] + [_CDOTS] + ds[-2:]
+            ds = ds[:2] + [_CDOTS]
         return f"{type(self).__name__}({self.ts}, {ds})"
 
     def __call__(self, f):
@@ -382,7 +382,7 @@ class _FileJob(_Job):
     def __repr__(self):
         ds = self.ds
         if self.ds and (len(self.ds) > 4):
-            ds = ds[:2] + [_CDOTS] + ds[-2:]
+            ds = ds[:2] + [_CDOTS]
         return f"{type(self).__name__}({self.ts}, {ds}, serial={self.serial})"
 
     def rm_targets(self):
