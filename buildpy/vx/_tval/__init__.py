@@ -2,6 +2,10 @@ import collections
 import threading
 
 
+class Err(Exception):
+    pass
+
+
 class TVal:
     __slots__ = ("_lock", "_val")
 
@@ -224,3 +228,12 @@ class ddict(object):
             for k, v in d.items():
                 setattr(self, k, self.__class__()._of_dict_rec(v) if isinstance(v, dict) else v)
             return self
+
+
+class NonOverwritableDict(TDict):
+
+    def __setitem__(self, k, v):
+        with self.lock:
+            if k in self.data:
+                raise Err(f"Tried to overwrite {k} with {v} for {self}")
+            self.data[k] = v

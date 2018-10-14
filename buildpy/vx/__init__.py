@@ -55,7 +55,7 @@ class DSL:
         logger.setLevel(getattr(logging, self.args.log.upper()))
         self.resource_of_uri = dict()
         self.resource_of_uri_lock = threading.RLock()
-        self.job_of_target = _tval.TDict()
+        self.job_of_target = _tval.NonOverwritableDict()
         self.jobs = _tval.TSet()
         self._use_hash = use_hash
         self.time_of_dep_cache = _tval.Cache()
