@@ -201,34 +201,6 @@ class DSL:
 
 # Internal use only.
 
-
-class _JobOfTarget(object):
-
-    def __init__(self, resource_of_uri, lock):
-        self.lock = lock
-        self._resource_of_uri = resource_of_uri
-
-    def __getitem__(self, k):
-        with self.lock: # 1
-            ret = self._resource_of_uri[k].dj
-            if ret is None:
-                raise KeyError(k)
-            return ret
-
-    def __contains__(self, k):
-        with self.lock: # 2
-            return (k in self._resource_of_uri) and (self._resource_of_uri[k].dj is not None)
-
-    def keys(self):
-        for k in self._resource_of_uri.keys():
-            if k in self:
-                yield k
-
-    def values(self):
-        for k in self.keys():
-            yield self[k]
-
-
 class _Nil:
     __slots__ = ()
 
@@ -593,9 +565,6 @@ class _FileJob(_Job):
         )
         self._use_hash = use_hash
         self.serial = serial
-        self._hash_orig = None
-        self._hash_curr = None
-        self._cache_path = None
 
     def __repr__(self):
         ds = self.ds
