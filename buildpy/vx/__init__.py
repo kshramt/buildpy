@@ -53,16 +53,16 @@ class DSL:
         assert self.args.load_average > 0
 
         logger.setLevel(getattr(logging, self.args.log.upper()))
-        self.resource_of_uri = dict()
-        self.resource_of_uri_lock = threading.RLock()
         self.job_of_target = _tval.NonOverwritableDict()
         self.jobs = _tval.TSet()
         self._use_hash = use_hash
         self.time_of_dep_cache = _tval.Cache()
         self.metadata = _tval.TDefaultDict()
 
+        self.task_context = _TaskContext()
+
         self.thread_pool = _ThreadPool(
-            self.resource_of_uri,
+            self.job_of_target,
             self.args.keep_going, self.args.jobs,
             self.args.n_serial, self.args.load_average
         )
@@ -145,8 +145,9 @@ class DSL:
             try:
                 for target in self.args.targets:
                     logger.debug(target)
-                    self.resource_of_uri[target].invoke()
-                self.thread_pool.wait()
+                    self.job_of_target[target].invoke()
+                for target in self.args.targets:
+                    self.job_of_target[target].wait()
             except KeyboardInterrupt as e:
                 self.thread_pool.stop = True
                 _terminate_subprocesses()
@@ -181,23 +182,6 @@ class DSL:
     def dependencies_dot(self):
         return _dependencies_dot_of(self.jobs)
 
-    def update_resource_of_uri(self, targets, deps, j):
-        with self.resource_of_uri_lock:
-            for target in targets:
-                if target in self.resource_of_uri:
-                    r = self.resource_of_uri[target]
-                    r.dj = j
-                else:
-                    r = _Resource(target, set(), j, dsl=self)
-                    self.resource_of_uri[target] = r
-            for dep in deps:
-                if dep in self.resource_of_uri:
-                    r = self.resource_of_uri[dep]
-                    r.add_tjs(j)
-                else:
-                    r = _Resource(dep, set([j]), None, dsl=self)
-                    self.resource_of_uri[dep] = r
-
 
 # Internal use only.
 
@@ -228,113 +212,7 @@ class _Cons:
         return f"({repr(self.h)} . {repr(self.t)})"
 
 
-class _Resource(object):
-
-    statuses = ("initial", "invoked", "done")
-
-    def __init__(self, uri, tjs, dj, dsl):
-        self.lock = threading.RLock()
-        self.uri = uri
-        self._tjs = tjs
-        self._dj = dj
-        self.dsl = dsl
-        self._status = "initial"
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}({repr(self.uri)}).status={repr(self.status)}"
-
-    @property
-    def tjs(self):
-        return self._tjs
-
-    @property
-    def dj(self):
-        return self._dj
-
-    @dj.setter
-    def dj(self, dj):
-        with self.lock: # 3
-            assert (self.dj is None) or self.dj == dj, (self, self.dj)
-            self._dj = dj
-
-    @property
-    def status(self):
-        assert self._status in self.statuses, self
-        return self._status
-
-    @status.setter
-    def status(self, v):
-        with self.lock: # 4
-            assert self._status in self.statuses, self._status
-            assert v in self.statuses, v
-            self._status = v
-
-    def add_tjs(self, tj):
-        with self.lock: # 5
-            self._tjs.add(tj)
-
-    def invoke(self, call_chain=_nil):
-        logger.debug(self)
-        if self in call_chain:
-            raise exception.Err(f"A circular dependency detected: {self} for {call_chain}")
-        with self.lock: # 9
-            status = self.status
-            if status == "initial":
-                self.status = "invoked"
-            elif status == "invoked":
-                return
-            elif status == "done":
-                pass
-            else:
-                raise exception.Err(f"Must not happen {self}")
-        if status == "initial":
-            assert self.status == "invoked"
-            if self.dj is None:
-                puri = DSL.uriparse(self.uri)
-                if (puri.scheme == "file") and (puri.netloc == "localhost"):
-                    # Although this branch is not necessary since the `else` branch does the job,
-                    # this branch is useful for a quick sanity check.
-                    if os.path.lexists(puri.path):
-                        @self.dsl.file([self.dsl.meta(self.uri, keep=True)], [])
-                        def _(j):
-                            raise exception.Err(f"Must not happen: the job for a leaf node {self.uri} is called")
-                    else:
-                        raise exception.Err(f"No rule to make {self.uri}")
-                else:
-                    # There is no easy (and cheap) way to check the existence of remote resources.
-                    @self.dsl.file([self.dsl.meta(self.uri, keep=True)], [])
-                    def _(j):
-                        raise exception.Err(f"No rule to make {self.uri}")
-            self.dj.invoke(_Cons(self, call_chain))
-        elif status == "invoked":
-            raise exception.Err("Must not happen {self}")
-        elif status == "done":
-            self.kick_ts()
-        else:
-            raise exception.Err(f"Must not happen {status} for {self}")
-
-    def kick(self):
-        logger.debug(self)
-        with self.lock: # 10
-            assert self.status in ("initial", "invoked"), self
-            if self.status == "initial":
-                self.status = "done"
-            elif self.status == "invoked":
-                self.kick_ts()
-            else:
-                raise exception.Err(f"Must not happen: {self}")
-
-    def kick_ts(self):
-        logger.debug(self)
-        assert self.status in ("invoked", "done")
-        for tj in self.tjs:
-            tj.kick(self.uri)
-        self.status = "done"
-
-
 class _Job(object):
-
-    statuses = ("initial", "invoked", "enqed", "done")
 
     def __init__(
             self,
@@ -347,8 +225,8 @@ class _Job(object):
             data,
     ):
         self.lock = threading.RLock()
-        self._status = "initial"
-        self.executed = False
+        self.done = threading.Event()
+        self.executed = False  # True if self.execute is called
         self.serial = False
 
         self._f = f
@@ -360,9 +238,11 @@ class _Job(object):
 
         self.ts_unique = set(self.ts)
         self.ds_unique = set(self.ds)
-        self.ds_done = set()
 
-        self.dsl.update_resource_of_uri(self.ts_unique, self.ds_unique, self)
+        self.task = None
+
+        for t in self.ts:
+            self.dsl.job_of_target[t] = self
 
         # User data.
         self.data = _tval.ddict(data)
@@ -371,66 +251,41 @@ class _Job(object):
         ds = self.ds
         if self.ds and (len(self.ds) > 4):
             ds = ds[:2] + [_CDOTS] + ds[-2:]
-        return f"{type(self).__name__}({self.ts}, {ds}).status={repr(self.status)}"
+        return f"{type(self).__name__}({self.ts}, {ds})"
 
     def __call__(self, f):
         self.f = f
         return self
 
     def __lt__(self, other):
-        with self.lock:
-            return self.priority < other.priority
+        return self.priority < other.priority
 
     @property
     def f(self):
-        with self.lock:
-            return _coalesce(self._f, _do_nothing)
+        return _coalesce(self._f, _do_nothing)
 
     @f.setter
     def f(self, f):
-        with self.lock:
-            if self._f is None:
-                self._f = f
-            elif self._f == f:
-                pass
-            else:
-                raise exception.Err(f"{self._f} for {self} is overwritten by {f}")
-
-    @property
-    def status(self):
-        with self.lock:
-            assert self._status in self.statuses, self
-            return self._status
-
-    @status.setter
-    def status(self, v):
-        with self.lock: # 11
-            assert self._status in self.statuses, self._status
-            assert v in self.statuses, v
-            self._status = v
+        if self._f is None:
+            self._f = f
+        elif self._f == f:
+            pass
+        else:
+            raise exception.Err(f"{self._f} for {self} is overwritten by {f}")
 
     def execute(self):
         logger.debug(self)
-        with self.lock: # 16
-            assert (self.status == "enqed"), self
-            assert (not self.executed), self
-            self.executed = True
+        assert (not self.done.is_set()), self
         if self.dsl.args.dry_run:
             self.write()
         else:
             self.f(self)
 
     def rm_targets(self):
-        assert (self.status == "enqed"), self
+        pass
 
     def need_update(self):
         return True
-
-    def mark_as_made(self, d):
-        with self.lock: # 12
-            if d is not None:
-                assert d in self.ds_unique, (d, self)
-                self.ds_done.add(d)
 
     def write(self, file=sys.stdout):
         logger.debug(self)
@@ -442,74 +297,37 @@ class _Job(object):
 
     def invoke(self, call_chain=_nil):
         logger.debug(self)
+
         if self in call_chain:
             raise exception.Err(f"A circular dependency detected: {self} for {call_chain}")
-        with self.lock: # 13
-            status = self.status
-            if status == "initial":
-                self.status = "invoked"
-            elif status == "invoked":
-                pass
-            elif status == "enqed":
-                return
-            elif status == "done":
-                return
-            else:
-                raise exception.Err(f"Must not happen {status} for {self}")
-        if status == "initial":
-            self._invoke(call_chain)
-        elif status == "invoked":
-            # A job with dy may be invoked multiple times
-            self._invoke(call_chain)
-        elif status == "enqed":
-            raise exception.Err(f"Must not happen {status} for {self}")
-        elif status == "done":
-            raise exception.Err(f"Must not happen {status} for {self}")
-        else:
-            raise exception.Err(f"Must not happen {status} for {self}")
+        with self.lock:
+            if self.task is None:
 
-    def _invoke(self, call_chain):
-        assert self.status == "invoked"
-        if self.ds_unique:
-            cc = _Cons(self, call_chain)
-            for d in self.ds_unique:
-                self.dsl.resource_of_uri[d].invoke(cc)
-        else:
-            self.kick()
-
-    def ready(self):
-        # It does not take much time to compare two sets
-        return self.ds_done == self.ds_unique
-
-    def kick(self, uri=None):
-        logger.debug(self)
-        with self.lock: # 14
-            if self.status == "initial":
-                self.mark_as_made(uri)
-            elif self.status == "invoked":
-                self.mark_as_made(uri)
-                if self.ready():
+                cc = _Cons(self, call_chain)
+                children = []
+                for d in self.ds_unique:
+                    try:
+                        children.append(self.dsl.job_of_target[d].invoke(cc))
+                    except KeyError:
+                        pass
+                def task_of_invoke(this):
+                    for child in children:
+                        yield this.wait(child)
                     self._enq()
-            elif self.status == "enqed":
-                assert self.ready()
-            elif self.status == "done":
-                assert self.ready()
-            else:
-                raise exception.Err(f"Must not happen: {self}")
+                    yield
+                    self.wait()
+
+                self.task = _Task(self.dsl.task_context, task_of_invoke, data=self)
+                self.task.put()
+        return self.task
+
+    def wait(self):
+        logger.debug(self)
+        self.done.wait()
 
     def _enq(self):
         logger.debug(self)
-        with self.lock: # 15
-            assert self.status == "invoked"
-            self.status = "enqed"
         self.dsl.thread_pool.push_job(self)
-
-    def kick_ts(self):
-        logger.debug(self)
-        assert self.status in ("enqed", "done"), self
-        for t in self.ts_unique:
-            self.dsl.resource_of_uri[t].kick()
-        self.status = "done"
 
 
 class _PhonyJob(_Job):
@@ -534,11 +352,6 @@ class _PhonyJob(_Job):
             dsl=dsl,
             data=data,
         )
-
-    def extend_ds(self, ds):
-        with self.lock:
-            self.ds.extend(ds)
-            self.ds_unique.update(ds)
 
 
 class _FileJob(_Job):
@@ -570,7 +383,7 @@ class _FileJob(_Job):
         ds = self.ds
         if self.ds and (len(self.ds) > 4):
             ds = ds[:2] + [_CDOTS] + ds[-2:]
-        return f"{type(self).__name__}({self.ts}, {ds}, serial={self.serial}).status={repr(self.status)}"
+        return f"{type(self).__name__}({self.ts}, {ds}, serial={self.serial})"
 
     def rm_targets(self):
         logger.info(f"rm_targets(%s)", self.ts)
@@ -579,19 +392,24 @@ class _FileJob(_Job):
             if not (("keep" in meta) and meta["keep"]):
                 try:
                     self.dsl.rm(t)
+                # todo: Catch errors from S3  https://stackoverflow.com/questions/33068055/boto3-python-and-how-to-handle-errors
                 except (OSError, google.cloud.exceptions.NotFound, exception.NotFound) as e:
                     logger.info("Failed to remove %s", t)
 
     def need_update(self):
-        with self.lock:
-            assert self.status == "enqed", self
-            if self.dsl.args.dry_run and self.ds_unique and any(self.dsl.resource_of_uri[d].dj.executed for d in self.ds_unique):
-                return True
-            return self._need_update()
+        if self.dsl.args.dry_run:
+            for d in self.ds_unique:
+                try:
+                    if self.dsl.job_of_target[d].executed:
+                        return True
+                except KeyError:
+                    pass
+        return self._need_update()
 
     def _need_update(self):
         try:
             t_ts = min(mtime_of(uri=t, use_hash=False, credential=self._credential_of(t)) for t in self.ts_unique)
+        # todo: Catch errors from S3  https://stackoverflow.com/questions/33068055/boto3-python-and-how-to-handle-errors
         except (OSError, google.cloud.exceptions.NotFound, exception.NotFound):
             # Intentionally create hash caches.
             for d in self.ds_unique:
@@ -618,11 +436,11 @@ class _FileJob(_Job):
 
 
 class _ThreadPool(object):
-    def __init__(self, resource_of_uri, keep_going, n_max, n_serial_max, load_average):
+    def __init__(self, job_of_target, keep_going, n_max, n_serial_max, load_average):
         assert n_max > 0
         assert n_serial_max > 0
         self.deferred_errors = queue.Queue()
-        self.resource_of_uri = resource_of_uri
+        self.job_of_target = job_of_target
         self._keep_going = keep_going
         self._n_max = n_max
         self._load_average = load_average
@@ -684,8 +502,6 @@ class _ThreadPool(object):
                     except queue.Empty:
                         break
                 logger.debug("working on %s", j)
-                assert j.ready()
-                got_error = False
                 need_update = j.need_update()
                 if need_update:
                     assert self._n_running.val() >= 0
@@ -698,8 +514,8 @@ class _ThreadPool(object):
                     self._n_running.inc()
                     try:
                         j.execute()
+                        j.executed = True
                     except Exception as e:
-                        got_error = True
                         logger.error(j)
                         e_str = _str_of_exception()
                         logger.error(e_str)
@@ -709,10 +525,9 @@ class _ThreadPool(object):
                         else:
                             self._die(e_str)
                     self._n_running.dec()
+                j.done.set()
                 if j.serial:
                     self._serial_queue_lock.release()
-                if not got_error:
-                    j.kick_ts()
             with self._threads_loc:
                 try:
                     self._threads.remove(threading.current_thread())
@@ -729,24 +544,23 @@ class _ThreadPool(object):
 
     def _die(self, e):
         logger.critical(e)
-        not_stopped = not self.stop
-        self.stop = True
         _terminate_subprocesses()
-        if not_stopped:
-            _thread.interrupt_main()
+        _thread.interrupt_main()
 
 
 class _TaskContext:
 
-    def __init__(self, q=queue.Queue):
+    def __init__(self):
         self.stop = False
 
-        self.queue = q()
+        self.queue = queue.Queue()
         self._th = threading.Thread(target=self._loop, daemon=True)
         self._th.start()
 
     def task(self, f):
-        return _Task(self, f)
+        t = _Task(self, f)
+        t.put()
+        return t
 
     def _loop(self):
         while not self.stop:
@@ -760,33 +574,32 @@ class _TaskContext:
 
 class _Task:
 
-    def __init__(self, ctx, f):
+    def __init__(self, ctx, f, data=None):
         self._ctx = ctx
         # `f` should behave as if a generator.
         self._g = iter(f(self))
+        self.data = data
 
         self.value = None
         self.error = None
-        self._waited = queue.Queue()
-        self._done = threading.Event()
-
-        self.put()
+        self.waited = queue.Queue()
+        self.done = threading.Event()
 
     def __repr__(self):
-        return f"{self.__class__.__name__} {self._g}"
+        return f"{self.__class__.__name__} {self._g} {self.data}"
 
     def __next__(self):
-        if self._done.is_set():
+        if self.done.is_set():
             raise StopIteration
         try:
             return next(self._g)
         except StopIteration as e:
-            self._done.set()
+            self.done.set()
             self.value = e.value
             self._put_waited()
             raise
         except Exception as e:
-            self._done.set()
+            self.done.set()
             self.error = e
             raise
 
@@ -802,23 +615,23 @@ class _Task:
         f.wait()
         """
         if child is None:
-            self._done.wait()
+            self.done.wait()
             return self
         else:
             # I do not need lock here since the `yield self.wait(child)` pattern does not occur in another thread.
-            if child._done.is_set():
+            if child.done.is_set():
                 return None  # switch = bool(None)
-            child._waited.put(self)
+            child.waited.put(self)
             return self  # switch = bool(self)
 
     def put(self):
         self._ctx.queue.put(self)
 
     def _put_waited(self):
-        assert self._done.is_set(), self
+        assert self.done.is_set(), self
         while True:
             try:
-                self._waited.get(block=False).put()
+                self.waited.get(block=False).put()
             except queue.Empty:
                 break
 
