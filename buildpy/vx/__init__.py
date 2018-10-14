@@ -226,7 +226,7 @@ class _Job(object):
     ):
         self.lock = threading.RLock()
         self.done = threading.Event()
-        self.executed = False  # True if self.execute is called
+        self.executed_successfully = False  # True if self.execute is called
         self.serial = False
 
         self._f = f
@@ -302,7 +302,6 @@ class _Job(object):
             raise exception.Err(f"A circular dependency detected: {self} for {call_chain}")
         with self.lock:
             if self.task is None:
-
                 cc = _Cons(self, call_chain)
                 children = []
                 for d in self.ds_unique:
@@ -316,7 +315,6 @@ class _Job(object):
                     self._enq()
                     yield
                     self.wait()
-
                 self.task = _Task(self.dsl.task_context, task_of_invoke, data=self)
                 self.task.put()
         return self.task
@@ -400,7 +398,7 @@ class _FileJob(_Job):
         if self.dsl.args.dry_run:
             for d in self.ds_unique:
                 try:
-                    if self.dsl.job_of_target[d].executed:
+                    if self.dsl.job_of_target[d].executed_successfully:
                         return True
                 except KeyError:
                     pass
@@ -436,7 +434,7 @@ class _FileJob(_Job):
 
 
 class _ThreadPool(object):
-    # todo: Replace me with concurrent.futures.
+    # It is not straightforward to support the `serial` argument by concurrent.future.
 
     def __init__(self, job_of_target, keep_going, n_max, n_serial_max, load_average):
         assert n_max > 0
@@ -516,7 +514,7 @@ class _ThreadPool(object):
                     self._n_running.inc()
                     try:
                         j.execute()
-                        j.executed = True
+                        j.executed_successfully = True
                     except Exception as e:
                         logger.error(j)
                         e_str = _str_of_exception()
@@ -551,7 +549,7 @@ class _ThreadPool(object):
 
 
 class _TaskContext:
-    # todo: Replace me with asyncio if possible. Not sure about thread safety of asyncio.
+    # It might be difficult to use asyncio with threading.
 
     def __init__(self):
         self.stop = False
@@ -621,7 +619,7 @@ class _Task:
             self.done.wait()
             return self
         else:
-            # I do not need lock here since the `yield self.wait(child)` pattern does not occur in another thread.
+            # I do not need a lock here since the `yield self.wait(child)` pattern does not occur in another thread.
             if child.done.is_set():
                 return None  # switch = bool(None)
             child.waited.put(self)
