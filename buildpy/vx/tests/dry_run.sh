@@ -91,10 +91,10 @@ all
 
 EOF
 
-cat <<EOF > expect.2
+cat <<EOF > expect.2.sort
+touch t1.done
 touch t2 t1
 touch t2.done
-touch t1.done
 EOF
 
 touch u1 u2
@@ -106,6 +106,7 @@ touch u1 u2
    touch t1
    "$PYTHON" build.py -n
 } 1> actual.1 2> actual.2
+sort actual.2 > actual.2.sort
 
 git diff --color-words --no-index --word-diff expect.1 actual.1
-git diff --color-words --no-index --word-diff expect.2 actual.2
+git diff --color-words --no-index --word-diff expect.2.sort actual.2.sort
