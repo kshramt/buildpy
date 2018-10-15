@@ -32,7 +32,7 @@ import os
 import sys
 import time
 
-import buildpy.vx
+import buildpy.v5
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -40,15 +40,12 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv, use_hash=True)
+dsl = buildpy.v5.DSL(sys.argv, use_hash=True)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
 rm = dsl.rm
 loop = dsl.loop
-
-
-all_jobs = []
 
 
 @file(["aa"], ["bb"])
@@ -71,10 +68,7 @@ def _(x):
         def _(j):
             time.sleep(1)
             sh(f"touch {j.ts[0]}")
-        all_jobs.append(t)
-
-
-phony("all", all_jobs)
+        phony("all", [t])
 
 
 if __name__ == '__main__':

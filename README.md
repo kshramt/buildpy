@@ -117,6 +117,10 @@ dsl.run()
 
 ## News
 
+### v6.0.0
+
+- Remove the complicated dynamic graph update capability, which has been rarely used.
+
 ### v5.1.0
 
 - Support `cut` argument for `DSL.phony` and `DSL.file`
@@ -226,3 +230,7 @@ find . -type f | grep -v done | xargs git add
 cd ../..
 python build.py sdist
 ```
+
+### TODO
+
+* v6: fully support the `--cut` argument.

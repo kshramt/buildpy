@@ -63,7 +63,7 @@ def _(j):
     """)
 
 
-phony("check", [], desc="Run tests")
+check_jobs = []
 
 
 @loop(vs)
@@ -72,13 +72,13 @@ def _(v):
     v_test_files = [path for path in v_files if path.startswith(os.path.join("buildpy", v, "tests"))]
     v_py_files = list(set(v_files).intersection(set(buildpy_py_files)))
 
-    phony("check", [f"check-{v}"])
-    phony(f"check-{v}", [])
+    check_jobs.append(f"check-{v}")
+    check_v_jobs = []
 
     @loop(path for path in v_test_files if path.endswith(".sh"))
     def _(test_sh):
         test_sh_done = test_sh + ".done"
-        phony(f"check-{v}", [test_sh_done])
+        check_v_jobs.append(test_sh_done)
 
         @file([test_sh_done], [test_sh] + v_py_files, desc=f"Test {test_sh}")
         def _(j):
@@ -90,7 +90,7 @@ def _(v):
     @loop(path for path in v_test_files if path.endswith(".py"))
     def _(test_py):
         test_py_done = test_py + ".done"
-        phony(f"check-{v}", [test_py_done])
+        check_v_jobs.append(test_py_done)
 
         @file([test_py_done], [test_py] + v_py_files, desc=f"Test {test_py}", priority=-1)
         def _(j):
@@ -98,6 +98,10 @@ def _(v):
             {python} {j.ds[0]}
             touch {j.ts[0]}
             """)
+    phony(f"check-{v}", check_v_jobs)
+
+
+phony("check", check_jobs, desc="Run tests")
 
 
 if __name__ == '__main__':

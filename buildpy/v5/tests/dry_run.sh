@@ -30,7 +30,7 @@ cat <<EOF > build.py
 import os
 import sys
 
-import buildpy.vx
+import buildpy.v5
 
 
 def _setup_logger():
@@ -51,7 +51,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.v5.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
@@ -91,10 +91,10 @@ all
 
 EOF
 
-cat <<EOF > expect.2.sort
-touch t1.done
+cat <<EOF > expect.2
 touch t2 t1
 touch t2.done
+touch t1.done
 EOF
 
 touch u1 u2
@@ -106,7 +106,6 @@ touch u1 u2
    touch t1
    "$PYTHON" build.py -n
 } 1> actual.1 2> actual.2
-sort actual.2 > actual.2.sort
 
 git diff --color-words --no-index --word-diff expect.1 actual.1
-git diff --color-words --no-index --word-diff expect.2.sort actual.2.sort
+git diff --color-words --no-index --word-diff expect.2 actual.2

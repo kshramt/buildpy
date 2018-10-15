@@ -53,6 +53,9 @@ def _(j):
     pass
 
 
+all_jobs = []
+
+
 @loop(["x", "y", "z"])
 def _(x):
     ts = [f"{x}1", f"{x}2", f"{x}3"]
@@ -68,7 +71,10 @@ def _(x):
         def _(j):
             time.sleep(1)
             sh(f"touch {j.ts[0]}")
-        phony("all", [t])
+        all_jobs.append(t)
+
+
+phony("all", all_jobs)
 
 
 if __name__ == '__main__':

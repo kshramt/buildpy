@@ -216,10 +216,10 @@ class S3(Resource):
             if credential is None:
                 # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
                 # ~/.aws/credentials
-                aws_access_key_id, aws_secret_access_key = None, None
+                cls._tls.cache[key] = boto3.session.Session().client("s3")
             else:
                 aws_access_key_id, aws_secret_access_key = credential
-            cls._tls.cache[key] = boto3.session.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key).client("s3")
+                cls._tls.cache[key] = boto3.session.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key).client("s3")
         return cls._tls.cache[key]
 
     @classmethod

@@ -1,9 +1,4 @@
-import collections
 import threading
-
-
-class Err(Exception):
-    pass
 
 
 class TVal:
@@ -18,7 +13,7 @@ class TVal:
             return self._val
 
 
-class TDict:
+class TDict(object):
 
     def __init__(self, *args, **kwargs):
         self.data = dict(*args, **kwargs)
@@ -69,13 +64,6 @@ class TDict:
             return self.data.setdefault(k, default)
 
 
-class TDefaultDict(TDict):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__()
-        self.data = collections.defaultdict(dict)
-
-
 class Cache:
 
     def __init__(self):
@@ -109,9 +97,6 @@ class TSet(TVal):
         with self._lock:
             return len(self._val)
 
-    def __iter__(self):
-        return iter(self.val())
-
     def add(self, x):
         with self._lock:
             self._val.add(x)
@@ -138,7 +123,7 @@ class TInt(TVal):
             self._val -= 1
 
 
-class ddict:
+class ddict(object):
     """
     >>> conf = ddict()
     >>> conf.z = 99
@@ -228,12 +213,3 @@ class ddict:
             for k, v in d.items():
                 setattr(self, k, self.__class__()._of_dict_rec(v) if isinstance(v, dict) else v)
             return self
-
-
-class NonOverwritableDict(TDict):
-
-    def __setitem__(self, k, v):
-        with self.lock:
-            if k in self.data:
-                raise Err(f"Tried to overwrite {k} with {v} for {self}")
-            self.data[k] = v

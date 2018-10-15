@@ -30,7 +30,7 @@ cat <<EOF > build.py
 import os
 import sys
 
-import buildpy.vx
+import buildpy.v5
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -38,7 +38,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.v5.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
@@ -73,13 +73,13 @@ check
 	t1.done
 	t2.done
 
+t1.done
+	t1
+
 t2
 t1
 	u2
 	u1
-
-t1.done
-	t1
 
 t2.done
 	t2

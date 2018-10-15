@@ -1,5 +1,5 @@
 #!/bin/bash
-# @(#) -P
+# @(#) The minimum mtime of targets should be compared with the maximum mtime of dependencies
 
 # set -xv
 set -o nounset
@@ -30,7 +30,7 @@ cat <<EOF > build.py
 import os
 import sys
 
-import buildpy.vx
+import buildpy.v5
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -38,56 +38,43 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.v5.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
 rm = dsl.rm
 
 
-phony("all", ["check"], desc="Default target")
-phony("check", ["t1.done", "t2.done"], desc="Run tests")
+phony("all", ["a", "b"], desc="Default target")
 
-@file(["t2.done"], ["t2"], desc="Test 2")
+@file(["a", "b"], ["c", "d"])
 def _(j):
-    pass
+    sh("sleep 2")
+    sh("touch" + " " + " ".join(j.ts))
 
-@file(["t1.done"], ["t1"], desc="Test 1")
+@file(["c", "d"], [])
 def _(j):
-    pass
-
-@file(["t2", "t1"], ["u2", "u1"])
-def _(j):
-    pass
+    sh("touch" + " " + " ".join(j.ts))
 
 
 if __name__ == '__main__':
     dsl.run()
 EOF
 
-cat <<EOF > expect
-all
-	check
-
-check
-	t1.done
-	t2.done
-
-t2
-t1
-	u2
-	u1
-
-t1.done
-	t1
-
-t2.done
-	t2
-
+cat <<EOF > expect.2
+touch c d
+sleep 2
+touch a b
+sleep 2
+touch a b
 EOF
 
 touch u1 u2
 
-"$PYTHON" build.py -P > actual
+{
+   "$PYTHON" build.py
+   touch --date 1970-01-01 b
+   "$PYTHON" build.py
+} 2> actual.2
 
-git diff --color-words --no-index --word-diff expect actual
+git diff --color-words --no-index --word-diff expect.2 actual.2

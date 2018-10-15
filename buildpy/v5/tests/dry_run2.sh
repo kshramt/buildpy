@@ -30,7 +30,7 @@ cat <<EOF > build.py
 import os
 import sys
 
-import buildpy.vx
+import buildpy.v5
 
 
 def _setup_logger():
@@ -51,25 +51,24 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.v5.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
 rm = dsl.rm
 
 
-phony("all", ["check"], desc="Default target")
-phony("check", ["t1.done", "t2.done"], desc="Run tests")
+phony("all", ["a"], desc="Default target")
 
-@file(["t2.done"], ["t2"], desc="Test 2")
+@file(["a"], ["b"], desc="Test 2")
 def _(j):
     sh("touch " + " ".join(j.ts))
 
-@file(["t1.done"], ["t1"], desc="Test 1")
+@file(["b"], ["c", "d"], desc="Test 1")
 def _(j):
     sh("touch " + " ".join(j.ts))
 
-@file(["t2", "t1"], ["u2", "u1"])
+@file(["d"], ["e"])
 def _(j):
     sh("touch " + " ".join(j.ts))
 
@@ -78,35 +77,24 @@ if __name__ == '__main__':
     dsl.run()
 EOF
 
-cat <<EOF > expect.1
-t1.done
-	t1
+cat <<EOF > expect
+d
+	e
 
-check
-	t1.done
-	t2.done
+b
+	c
+	d
+
+a
+	b
 
 all
-	check
+	a
 
 EOF
 
-cat <<EOF > expect.2.sort
-touch t1.done
-touch t2 t1
-touch t2.done
-EOF
+touch c e
 
-touch u1 u2
+"$PYTHON" build.py -n > actual
 
-{
-   "$PYTHON" build.py
-   # HFS has only 1 s time resolution
-   sleep 1.1
-   touch t1
-   "$PYTHON" build.py -n
-} 1> actual.1 2> actual.2
-sort actual.2 > actual.2.sort
-
-git diff --color-words --no-index --word-diff expect.1 actual.1
-git diff --color-words --no-index --word-diff expect.2.sort actual.2.sort
+git diff --color-words --no-index --word-diff expect actual

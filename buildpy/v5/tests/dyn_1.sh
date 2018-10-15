@@ -27,7 +27,7 @@ cat <<EOF > "$tmp_dir"/build.py
 import os
 import sys
 
-import buildpy.vx
+import buildpy.v5
 
 
 def _setup_logger():
@@ -48,7 +48,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.v5.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh

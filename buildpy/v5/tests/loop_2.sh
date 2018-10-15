@@ -1,5 +1,5 @@
 #!/bin/bash
-# @(#) -P
+# @(#) -j
 
 # set -xv
 set -o nounset
@@ -29,8 +29,9 @@ cat <<EOF > build.py
 
 import os
 import sys
+import time
 
-import buildpy.vx
+import buildpy.v5
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -38,56 +39,33 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.v5.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
+loop = dsl.loop
 sh = dsl.sh
 rm = dsl.rm
 
 
-phony("all", ["check"], desc="Default target")
-phony("check", ["t1.done", "t2.done"], desc="Run tests")
-
-@file(["t2.done"], ["t2"], desc="Test 2")
-def _(j):
-    pass
-
-@file(["t1.done"], ["t1"], desc="Test 1")
-def _(j):
-    pass
-
-@file(["t2", "t1"], ["u2", "u1"])
-def _(j):
-    pass
+@loop((i for i in range(2)), [j for j in range(3)])
+def _(i, j):
+    phony("all", [f"{i}_{j}"])
+    @phony(f"{i}_{j}", [])
+    def _(j):
+        print(j.ts[0])
 
 
 if __name__ == '__main__':
     dsl.run()
 EOF
 
-cat <<EOF > expect
-all
-	check
-
-check
-	t1.done
-	t2.done
-
-t2
-t1
-	u2
-	u1
-
-t1.done
-	t1
-
-t2.done
-	t2
-
+"$PYTHON" build.py | sort >| actual
+cat <<EOF >| expected
+0_0
+0_1
+0_2
+1_0
+1_1
+1_2
 EOF
-
-touch u1 u2
-
-"$PYTHON" build.py -P > actual
-
-git diff --color-words --no-index --word-diff expect actual
+git diff --color-words --no-index --word-diff expected actual
