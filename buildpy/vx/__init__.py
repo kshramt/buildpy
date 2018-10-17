@@ -150,6 +150,7 @@ class DSL:
                     self.job_of_target[target].wait()
             except KeyboardInterrupt as e:
                 self.thread_pool.stop = True
+                self.task_context.stop = True
                 _terminate_subprocesses()
                 raise
             if self.thread_pool.deferred_errors.qsize() > 0:
