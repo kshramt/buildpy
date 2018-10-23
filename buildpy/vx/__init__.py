@@ -540,7 +540,6 @@ class _ThreadPool(object):
                     pass
         except Exception as e: # Propagate Exception caused by a bug in buildpy code to the main thread.
             e_str = _str_of_exception()
-            logger.error(e_str)
             self._die(e_str)
 
     def _die(self, e):
