@@ -596,13 +596,13 @@ class _Task:
         try:
             return next(self._g)
         except StopIteration as e:
-            self.done.set()
             self.value = e.value
+            self.done.set()
             self._put_waited()
             raise
         except Exception as e:
-            self.done.set()
             self.error = e
+            self.done.set()
             raise
 
     def __iter__(self):
