@@ -228,6 +228,7 @@ cd v9
 grep -l buildpy.vx -R . | xargs -n1 sed -i'' -e 's/buildpy.vx/buildpy.v9/g'
 find . -type f | grep -v done | xargs git add
 cd ../..
+# edit setup.py
 python build.py sdist
 ```
 

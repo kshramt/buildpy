@@ -74,5 +74,4 @@ EOF
 
 
 
-timeout 3 "$PYTHON" build.py
-# timeout 3 sh -c '"$PYTHON" build.py --log=debug || :'
+timeout 10 sh -c '"$PYTHON" build.py 2> /dev/null || :'

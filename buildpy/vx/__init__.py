@@ -29,7 +29,7 @@ __version__ = "6.0.0"
 _PRIORITY_DEFAULT = 0
 
 
-_CDOTS = ".."
+_CDOTS = "…"
 
 
 # Main
@@ -64,7 +64,7 @@ class DSL:
         self.thread_pool = _ThreadPool(
             self.job_of_target,
             self.args.keep_going, self.args.jobs,
-            self.args.n_serial, self.args.load_average
+            self.args.n_serial, self.args.load_average,
         )
 
     def file(
@@ -227,7 +227,8 @@ class _Job(object):
     ):
         self.lock = threading.RLock()
         self.done = threading.Event()
-        self.executed_successfully = False  # True if self.execute is called
+        self.executed = False
+        self.successed = False  # True if self.execute did not raise an error
         self.serial = False
 
         self._f = f
@@ -307,18 +308,25 @@ class _Job(object):
                 children = []
                 for d in self.ds_unique:
                     try:
-                        children.append(self.dsl.job_of_target[d].invoke(cc))
+                        child = self.dsl.job_of_target[d]
                     except KeyError:
-                        pass
+                        @self.dsl.file([self.dsl.meta(d, keep=True)], [])
+                        def _(j):
+                            raise exception.Err(f"No rule to make {d}")
+                        child = self.dsl.job_of_target[d]
+                    children.append(child.invoke(cc))
                 def task_of_invoke(this):
                     for child in children:
-                        yield this.wait(child)
-                    self._enq()
-                    yield
-                    self.wait()
+                        yield this.wait(child.task)
+                    if all(child.successed for child in children):
+                        self._enq()
+                        yield
+                        self.wait()
+                    else:
+                        self.done.set()
                 self.task = _Task(self.dsl.task_context, task_of_invoke, data=self)
                 self.task.put()
-        return self.task
+        return self
 
     def wait(self):
         logger.debug(self)
@@ -399,7 +407,7 @@ class _FileJob(_Job):
         if self.dsl.args.dry_run:
             for d in self.ds_unique:
                 try:
-                    if self.dsl.job_of_target[d].executed_successfully:
+                    if self.dsl.job_of_target[d].executed:
                         return True
                 except KeyError:
                     pass
@@ -515,7 +523,8 @@ class _ThreadPool(object):
                     self._n_running.inc()
                     try:
                         j.execute()
-                        j.executed_successfully = True
+                        j.executed = True
+                        j.successed = True
                     except Exception as e:
                         logger.error(j)
                         e_str = _str_of_exception()
@@ -526,6 +535,8 @@ class _ThreadPool(object):
                         else:
                             self._die(e_str)
                     self._n_running.dec()
+                else:
+                    j.successed = True
                 j.done.set()
                 if j.serial:
                     self._serial_queue_lock.release()
@@ -718,7 +729,7 @@ def _parse_argv(argv):
     if not args.targets:
         args.targets.append("all")
     if args.cut is None:
-        args.cut = []
+        args.cut = set()
     args.cut = set(args.cut)
     return args
 
