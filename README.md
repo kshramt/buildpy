@@ -41,20 +41,26 @@ file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
 
-phony("all", ["test"])
-phony("test", ["main.exe.log1", "main.exe.log2"])
+all_jobs = []
+test_jobs = []
+
+all_jobs.append("test")
+test_jobs.extend(["main.exe.log1", "main.exe.log2"])
 @file(["main.exe.log1", "main.exe.log2"], ["main.exe"])
 def _(j):
     # j.ts: list of targets
     # j.ds: list of dependencies
     sh(f"./{j.ds[0]} 1> {j.ts[0]} 2> {j.ts[1]}")
 
-phony("all", ["build"])
-phony("build", ["main.exe"])
+all_jobs.append("build")
+test_jobs.append("main.exe")
 
 @file("main.exe", ["main.c"])
 def _(j):
     sh(f"gcc -o {j.ts[0]} {j.ds[0]}")
+
+phony("all", all_jobs)
+phony("test", test_jobs)
 
 if __name__ == '__main__':
     dsl.run()
@@ -96,10 +102,6 @@ def _(job):
 # Make a phony target named `taregetB`, which depends on `dep3` and `dep4`.
 # An invocation of `targetB` executes no command.
 dsl.phony("targetB", ["dep3", "dep4"])
-
-# You are able to append dependencies by declaring `dsl.phony` without a decoration.
-# Following code appends `dep5` to the dependencies of `targetA`.
-dsl.phony("targetA", ["dep5"])
 ```
 
 The phony target named `all` is invoked if no target is specified on the command line.
