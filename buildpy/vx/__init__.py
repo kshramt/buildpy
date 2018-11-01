@@ -606,7 +606,7 @@ class _Task:
         self.done = threading.Event()
 
     def __repr__(self):
-        return f"{self.__class__.__name__} {self._g} {self.data}"
+        return f"{self.__class__.__name__} {self.data}"
 
     def __next__(self):
         if self.done.is_set():
