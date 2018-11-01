@@ -65,6 +65,7 @@ class DSL:
             self.job_of_target,
             self.args.keep_going, self.args.jobs,
             self.args.n_serial, self.args.load_average,
+            die_hooks=[self._cleaup],
         )
 
     def file(
@@ -149,9 +150,7 @@ class DSL:
                 for target in self.args.targets:
                     self.job_of_target[target].wait()
             except KeyboardInterrupt as e:
-                self.thread_pool.stop = True
-                self.task_context.stop = True
-                _terminate_subprocesses()
+                self._cleaup()
                 raise
             if self.thread_pool.deferred_errors.qsize() > 0:
                 logger.error("Following errors have thrown during the execution")
@@ -182,6 +181,11 @@ class DSL:
 
     def dependencies_dot(self):
         return _dependencies_dot_of(self.jobs)
+
+    def _cleaup(self):
+        self.task_context.stop = True
+        self.thread_pool.stop = True
+        _terminate_subprocesses()
 
 
 # Internal use only.
@@ -445,7 +449,7 @@ class _FileJob(_Job):
 class _ThreadPool(object):
     # It is not straightforward to support the `serial` argument by concurrent.future.
 
-    def __init__(self, job_of_target, keep_going, n_max, n_serial_max, load_average):
+    def __init__(self, job_of_target, keep_going, n_max, n_serial_max, load_average, die_hooks):
         assert n_max > 0
         assert n_serial_max > 0
         self.deferred_errors = queue.Queue()
@@ -453,6 +457,7 @@ class _ThreadPool(object):
         self._keep_going = keep_going
         self._n_max = n_max
         self._load_average = load_average
+        self._die_hooks = die_hooks
         self._threads = _tval.TSet()
         self._unwaited_threads = _tval.TSet()
         self._threads_loc = threading.RLock()
@@ -556,6 +561,8 @@ class _ThreadPool(object):
     def _die(self, e):
         logger.critical(e)
         _terminate_subprocesses()
+        for h in self._die_hooks:
+            h()
         _thread.interrupt_main()
 
 
