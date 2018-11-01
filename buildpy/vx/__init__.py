@@ -334,7 +334,9 @@ class _Job(object):
 
     def wait(self):
         logger.debug(self)
-        self.done.wait()
+        # while not self.done.wait(timeout=0.5):
+        while not self.done.wait(timeout=0.5):
+            pass
 
     def _enq(self):
         logger.debug(self)
