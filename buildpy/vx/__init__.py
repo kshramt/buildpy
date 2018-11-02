@@ -586,8 +586,9 @@ class _TaskContext:
         while not self.stop:
             task = self.queue.get(block=True)
             try:
-                if not next(task):
-                    task.put()
+                if not task.waiting:
+                    next(task)
+                task.put()
             except StopIteration:
                 pass
 
@@ -600,6 +601,7 @@ class _Task:
         self._g = iter(f(self))
         self.data = data
 
+        self.waiting = False
         self.value = None
         self.error = None
         self.waited = queue.Queue()
@@ -616,7 +618,7 @@ class _Task:
         except StopIteration as e:
             self.value = e.value
             self.done.set()
-            self._put_waited()
+            self._unmark_waited()
             raise
         except Exception as e:
             self.error = e
@@ -636,22 +638,23 @@ class _Task:
         """
         if child is None:
             self.done.wait()
-            return self
         else:
             # I do not need a lock here since the `yield self.wait(child)` pattern does not occur in another thread.
             if child.done.is_set():
-                return None  # switch = bool(None)
+                return
+            self.waiting = True
             child.waited.put(self)
-            return self  # switch = bool(self)
 
     def put(self):
         self._ctx.queue.put(self)
 
-    def _put_waited(self):
+    def _unmark_waited(self):
         assert self.done.is_set(), self
         while True:
             try:
-                self.waited.get(block=False).put()
+                t = self.waited.get(block=False)
+                assert t.waiting == True, t
+                t.waiting = False
             except queue.Empty:
                 break
 
