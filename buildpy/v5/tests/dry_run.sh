@@ -106,7 +106,7 @@ touch u1 u2
    touch t1
    "$PYTHON" build.py -n
 } 1> actual.1 2> actual.2
-LANG=C sort actual.2 > actual.2.sort
+LC_ALL=C sort actual.2 > actual.2.sort
 
 git diff --color-words --no-index --word-diff expect.1 actual.1
 git diff --color-words --no-index --word-diff expect.2.sort actual.2.sort
