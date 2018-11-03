@@ -119,6 +119,10 @@ dsl.run()
 
 ## News
 
+### v6.1.0
+
+- Set `use_hash=True` by default.
+
 ### v6.0.0
 
 - Remove the complicated dynamic graph update capability, which has been rarely used.
