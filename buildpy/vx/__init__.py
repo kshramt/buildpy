@@ -323,11 +323,10 @@ class _Job(object):
                     for child in children:
                         yield this.wait(child.task)
                     if all(child.successed for child in children):
-                        self._enq()
-                        yield
-                        # The task loop should not be blocked by an waiting task.
-                        while not self.done.wait(timeout=2):
-                            yield
+                        # self.task.put() is called inside _worker()
+                        # todo: _Task, _Job, and _ThreadPool should be decoupled.
+                        yield self._enq()
+                        assert self.done.is_set(), self
                     else:
                         self.done.set()
                 self.task = _Task(self.dsl.task_context, task_of_invoke, data=self)
@@ -342,6 +341,7 @@ class _Job(object):
     def _enq(self):
         logger.debug(self)
         self.dsl.thread_pool.push_job(self)
+        return self
 
 
 class _PhonyJob(_Job):
@@ -519,8 +519,7 @@ class _ThreadPool(object):
                     except queue.Empty:
                         break
                 logger.debug("working on %s", j)
-                need_update = j.need_update()
-                if need_update:
+                if j.need_update():
                     assert self._n_running.val() >= 0
                     if math.isfinite(self._load_average):
                         while (
@@ -546,6 +545,7 @@ class _ThreadPool(object):
                 else:
                     j.successed = True
                 j.done.set()
+                j.task.put()
                 if j.serial:
                     self._serial_queue_lock.release()
             with self._threads_loc:
@@ -585,12 +585,21 @@ class _TaskContext:
         return t
 
     def _loop(self):
+        # print("vvvv", file=sys.stderr)
+        # for t in self.queue.queue.copy():
+        #     print("\t", t, file=sys.stderr)
+        # print("^^^^", file=sys.stderr)
         while not self.stop:
+            # print("vvvv", file=sys.stderr)
+            # for t in self.queue.queue.copy():
+            #     print("\t", t, file=sys.stderr)
+            # print("^^^^", file=sys.stderr)
             task = self.queue.get(block=True)
             try:
-                if not task.waiting:
-                    next(task)
-                task.put()
+                if next(task):
+                    pass
+                else:
+                    task.put()
             except StopIteration:
                 pass
 
@@ -603,7 +612,6 @@ class _Task:
         self._g = iter(f(self))
         self.data = data
 
-        self.waiting = False
         self.value = None
         self.error = None
         self.waited = queue.Queue()
@@ -620,7 +628,7 @@ class _Task:
         except StopIteration as e:
             self.value = e.value
             self.done.set()
-            self._unmark_waited()
+            self._put_waited()
             raise
         except Exception as e:
             self.error = e
@@ -640,23 +648,22 @@ class _Task:
         """
         if child is None:
             self.done.wait()
+            return self
         else:
             # I do not need a lock here since the `yield self.wait(child)` pattern does not occur in another thread.
             if child.done.is_set():
-                return
-            self.waiting = True
+                return False
             child.waited.put(self)
+            return self
 
     def put(self):
         self._ctx.queue.put(self)
 
-    def _unmark_waited(self):
+    def _put_waited(self):
         assert self.done.is_set(), self
         while True:
             try:
-                t = self.waited.get(block=False)
-                assert t.waiting == True, t
-                t.waiting = False
+                self.waited.get(block=False).put()
             except queue.Empty:
                 break
 
