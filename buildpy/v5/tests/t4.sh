@@ -73,13 +73,13 @@ check
 	t1.done
 	t2.done
 
-t1.done
-	t1
-
 t2
 t1
 	u2
 	u1
+
+t1.done
+	t1
 
 t2.done
 	t2

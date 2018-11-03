@@ -970,8 +970,8 @@ def _print_descriptions(job_of_target):
 
 
 def _print_dependencies(job_of_target):
-    # list(j.ts_unique) is used to make tests pass
-    for j in sorted(set(job_of_target.values()), key=lambda j: list(j.ts_unique)):
+    # sorted(j.ts_unique) is used to make the output deterministic
+    for j in sorted(set(job_of_target.values()), key=lambda j: sorted(j.ts_unique)):
         j.write()
 
 
