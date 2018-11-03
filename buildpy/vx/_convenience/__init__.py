@@ -47,9 +47,11 @@ def sh(
         executable="/bin/bash",
         shell=True,
         universal_newlines=True,
+        quiet=False,
         **kwargs,
 ):
-    print(s, file=sys.stderr)
+    if not quiet:
+        print(s, file=sys.stderr)
     return subprocess.run(
         s,
         check=check,
