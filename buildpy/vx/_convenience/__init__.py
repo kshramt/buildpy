@@ -70,6 +70,21 @@ def let(f):
 
 def loop(*lists, tform=itertools.product):
     """
+    Use
+
+        fns = []
+        @loop(xs)
+        def _(x):
+            fns.append(lambda: x)
+
+    instead of
+
+        fns = []
+        for x in xs:
+            fns.append(lambda: x)
+
+    to address the late-binding issue.
+
     >>> loop([1, 2], ["a", "b"])(lambda x, y: print(x, y))
     1 a
     1 b
