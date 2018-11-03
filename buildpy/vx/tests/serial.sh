@@ -27,7 +27,6 @@ cd "$tmp_dir"
 cat <<EOF > build.py
 #!/usr/bin/python
 
-import datetime
 import os
 import sys
 import time
@@ -62,7 +61,7 @@ def _(x):
     @file(ts, [f"{x}0"], serial=True)
     def _(j):
         time.sleep(1)
-        sh(f"touch {' '.join(j.ts)}")
+        sh(f"touch {' '.join(j.ts)}", quiet=True)
 
     @loop(ts)
     def _(y):
@@ -70,7 +69,7 @@ def _(x):
         @file([t], [y])
         def _(j):
             time.sleep(1)
-            sh(f"touch {j.ts[0]}")
+            sh(f"touch {j.ts[0]}", quiet=True)
         all_jobs.append(t)
 
 
@@ -78,12 +77,12 @@ phony("all", all_jobs)
 
 
 if __name__ == '__main__':
-    t1 = datetime.datetime.now()
+    t1 = time.time()
     dsl.run()
-    t2 = datetime.datetime.now()
-    dt = (t2 - t1)/datetime.timedelta(seconds=1)
+    t2 = time.time()
+    dt = t2 - t1
     assert 3.5 < dt < 4.5, dt
 EOF
 
 touch x0 y0 z0
-"$PYTHON" build.py -j1000 2> /dev/null
+"$PYTHON" build.py -j1000

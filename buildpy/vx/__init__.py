@@ -325,7 +325,9 @@ class _Job(object):
                     if all(child.successed for child in children):
                         self._enq()
                         yield
-                        self.wait()
+                        # The task loop should not be blocked by an waiting task.
+                        while not self.done.wait(timeout=0.05):
+                            yield
                     else:
                         self.done.set()
                 self.task = _Task(self.dsl.task_context, task_of_invoke, data=self)
