@@ -329,7 +329,7 @@ class _Job(object):
                         assert self.done.is_set(), self
                     else:
                         self.done.set()
-                self.task = _Task(self.dsl.task_context, task_of_invoke, data=self)
+                self.task = _Task(self.dsl.task_context, task_of_invoke, data=self, priority=self.priority)
                 self.task.put()
         return self
 
@@ -575,7 +575,7 @@ class _TaskContext:
     def __init__(self):
         self.stop = False
 
-        self.queue = queue.Queue()
+        self.queue = queue.PriorityQueue()
         self._th = threading.Thread(target=self._loop, daemon=True)
         self._th.start()
 
@@ -606,11 +606,12 @@ class _TaskContext:
 
 class _Task:
 
-    def __init__(self, ctx, f, data=None):
+    def __init__(self, ctx, f, data=None, priority=_PRIORITY_DEFAULT):
         self._ctx = ctx
         # `f` should behave as if a generator.
         self._g = iter(f(self))
         self.data = data
+        self.priority = priority
 
         self.value = None
         self.error = None
@@ -619,6 +620,9 @@ class _Task:
 
     def __repr__(self):
         return f"{self.__class__.__name__} {self.data}"
+
+    def __lt__(self, other):
+        return self.priority < other.priority
 
     def __next__(self):
         if self.done.is_set():
