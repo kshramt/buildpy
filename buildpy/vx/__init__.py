@@ -47,7 +47,7 @@ class DSL:
     serialize = staticmethod(_convenience.serialize)
     uriparse = staticmethod(_convenience.uriparse)
 
-    def __init__(self, argv, use_hash=True):
+    def __init__(self, argv, use_hash=True, terminate_subprocesses=True):
         self.args = _parse_argv(argv[1:])
         assert self.args.jobs > 0
         assert self.args.load_average > 0
@@ -56,6 +56,7 @@ class DSL:
         self.job_of_target = _tval.NonOverwritableDict()
         self.jobs = _tval.TSet()
         self._use_hash = use_hash
+        self._terminate_subprocesses = terminate_subprocesses
         self.time_of_dep_cache = _tval.Cache()
         self.metadata = _tval.TDefaultDict()
 
@@ -65,7 +66,7 @@ class DSL:
             self.job_of_target,
             self.args.keep_going, self.args.jobs,
             self.args.n_serial, self.args.load_average,
-            die_hooks=[self._cleaup],
+            die_hooks=[self._cleanup],
         )
 
     def file(
@@ -150,7 +151,7 @@ class DSL:
                 for target in self.args.targets:
                     self.job_of_target[target].wait()
             except KeyboardInterrupt as e:
-                self._cleaup()
+                self._cleanup()
                 raise
             if self.thread_pool.deferred_errors.qsize() > 0:
                 logger.error("Following errors have thrown during the execution")
@@ -182,10 +183,11 @@ class DSL:
     def dependencies_dot(self):
         return _dependencies_dot_of(self.jobs)
 
-    def _cleaup(self):
+    def _cleanup(self):
         self.task_context.stop = True
         self.thread_pool.stop = True
-        _terminate_subprocesses()
+        if self._terminate_subprocesses:
+            _terminate_subprocesses()
 
 
 # Internal use only.
@@ -563,7 +565,6 @@ class _ThreadPool(object):
 
     def _die(self, e):
         logger.critical(e)
-        _terminate_subprocesses()
         for h in self._die_hooks:
             h()
         _thread.interrupt_main()
