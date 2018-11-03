@@ -47,7 +47,7 @@ class DSL:
     serialize = staticmethod(_convenience.serialize)
     uriparse = staticmethod(_convenience.uriparse)
 
-    def __init__(self, argv, use_hash=False):
+    def __init__(self, argv, use_hash=True):
         self.args = _parse_argv(argv[1:])
         assert self.args.jobs > 0
         assert self.args.load_average > 0

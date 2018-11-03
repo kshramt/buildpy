@@ -1,5 +1,5 @@
 #!/bin/bash
-# @(#) set `use_hash` globally
+# @(#) without `use_hash`
 
 # set -xv
 set -o nounset
@@ -38,7 +38,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv, use_hash=True)
+dsl = buildpy.vx.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh

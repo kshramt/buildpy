@@ -51,7 +51,7 @@ def _setup_logger():
 logger = _setup_logger()
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.vx.DSL(sys.argv, use_hash=False)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
