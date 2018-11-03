@@ -566,7 +566,10 @@ class _ThreadPool(object):
     def _die(self, e):
         logger.critical(e)
         for h in self._die_hooks:
-            h()
+            try:
+                h()
+            except Exception:
+                pass
         _thread.interrupt_main()
 
 
