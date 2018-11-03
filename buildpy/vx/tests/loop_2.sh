@@ -64,7 +64,7 @@ if __name__ == '__main__':
     dsl.run()
 EOF
 
-"$PYTHON" build.py | sort >| actual
+"$PYTHON" build.py | LANG=C sort >| actual
 cat <<EOF >| expected
 0_0
 0_1
