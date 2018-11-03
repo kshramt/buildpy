@@ -120,6 +120,10 @@ dsl.run()
 
 ## News
 
+### v6.2.0
+
+- Make the termination of subprocesses optional.
+
 ### v6.1.0
 
 - Set `use_hash=True` by default.
