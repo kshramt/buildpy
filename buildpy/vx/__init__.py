@@ -326,7 +326,7 @@ class _Job(object):
                         self._enq()
                         yield
                         # The task loop should not be blocked by an waiting task.
-                        while not self.done.wait(timeout=0.05):
+                        while not self.done.wait(timeout=2):
                             yield
                     else:
                         self.done.set()
@@ -336,7 +336,7 @@ class _Job(object):
 
     def wait(self):
         logger.debug(self)
-        while not self.done.wait(timeout=0.5):
+        while not self.done.wait(timeout=1):
             pass
 
     def _enq(self):
