@@ -44,9 +44,9 @@ class LocalFile(Resource):
     def rm(cls, uri, credential):
         puri = cls._check_uri(uri)
         try:
-            return os.remove(puri.path)
+            return os.remove(puri.uri)
         except OSError:
-            return shutil.rmtree(puri.path)
+            return shutil.rmtree(puri.uri)
 
     @classmethod
     def mtime_of(cls, uri, credential, use_hash):
@@ -55,10 +55,10 @@ class LocalFile(Resource):
         * min(uri_time, cache_time)
         """
         puri = _convenience.uriparse(uri)
-        t_uri = os.path.getmtime(puri.path)
+        t_uri = os.path.getmtime(puri.uri)
         if not use_hash:
             return t_uri
-        return _min_of_t_uri_and_t_cache(t_uri, functools.partial(_hash_of_path, puri.path), puri)
+        return _min_of_t_uri_and_t_cache(t_uri, functools.partial(_hash_of_path, puri.uri), puri)
 
     @classmethod
     def _check_uri(cls, uri):
@@ -70,9 +70,6 @@ class LocalFile(Resource):
         puri = _convenience.uriparse(uri)
         assert puri.scheme == cls.scheme, puri
         assert puri.netloc == "localhost", puri
-        assert puri.params == "", puri
-        assert puri.query == "", puri
-        assert puri.fragment == "", puri
         return puri
 
 
@@ -247,8 +244,8 @@ def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
     """
     min(uri_time, cache_time)
     """
-    assert puri.path, puri
-    cache_path = _convenience.jp(CACHE_DIR, puri.scheme, puri.netloc, os.path.abspath(puri.path))
+    assert puri.uri, puri
+    cache_path = _convenience.jp(CACHE_DIR, puri.scheme, puri.netloc, os.path.abspath(puri.uri))
     try:
         cache_path_stat = os.stat(cache_path)
     except OSError:

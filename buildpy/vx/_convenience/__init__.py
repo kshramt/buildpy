@@ -10,7 +10,7 @@ import urllib
 from .. import exception
 
 
-_URI = collections.namedtuple("_URI", ["scheme", "netloc", "path", "params", "query", "fragment"])
+_URI = collections.namedtuple("_URI", ["uri", "scheme", "netloc", "path", "params", "query", "fragment"])
 
 
 class cd(object):
@@ -144,7 +144,7 @@ def uriparse(uri):
         netloc = "localhost"
     if (scheme == "file") and (netloc != "localhost"):
         raise exception.Err("netloc of a file URI should be localhost: {uri}")
-    return _URI(scheme=scheme, netloc=netloc, path=path, params=params, query=query, fragment=fragment)
+    return _URI(uri=uri, scheme=scheme, netloc=netloc, path=path, params=params, query=query, fragment=fragment)
 
 
 def serialize(x):

@@ -23,6 +23,17 @@ def main(argv):
 
     @buildpy.vx.DSL.let
     def _():
+        puri = buildpy.vx.DSL.uriparse("a/b;c;d?e=f#gh")
+        assert puri.uri == "a/b;c;d?e=f#gh", puri.uri
+        assert puri.scheme == "file", puri.scheme
+        assert puri.netloc == "localhost", puri.netloc
+        assert puri.path == "a/b", puri.path
+        assert puri.params == "c;d", puri.params
+        assert puri.query == "e=f", puri.query
+        assert puri.fragment == "gh", puri.fragment
+
+    @buildpy.vx.DSL.let
+    def _():
         ctx = buildpy.vx._TaskContext()
         outs = []
 
