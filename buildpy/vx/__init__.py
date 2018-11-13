@@ -521,7 +521,21 @@ class _ThreadPool(object):
                     except queue.Empty:
                         break
                 logger.debug("working on %s", j)
-                if j.need_update():
+                def _post_exception():
+                    logger.error(j)
+                    e_str = _str_of_exception()
+                    logger.error(e_str)
+                    j.rm_targets()
+                    if self._keep_going:
+                        self.deferred_errors.put((j, e_str))
+                    else:
+                        self._die(e_str)
+                try:
+                    need_update = j.need_update()
+                except:
+                    need_update = None
+                    _post_exception()
+                if need_update:
                     assert self._n_running.val() >= 0
                     if math.isfinite(self._load_average):
                         while (
@@ -535,17 +549,14 @@ class _ThreadPool(object):
                         j.executed = True
                         j.successed = True
                     except Exception as e:
-                        logger.error(j)
-                        e_str = _str_of_exception()
-                        logger.error(e_str)
-                        j.rm_targets()
-                        if self._keep_going:
-                            self.deferred_errors.put((j, e_str))
-                        else:
-                            self._die(e_str)
+                        _post_exception()
                     self._n_running.dec()
                 else:
-                    j.successed = True
+                    j.executed = False
+                    if need_update is None:
+                        j.successed = False
+                    else:
+                        j.successed = True
                 j.done.set()
                 j.task.put()
                 if j.serial:
