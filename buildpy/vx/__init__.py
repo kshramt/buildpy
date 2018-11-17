@@ -321,17 +321,7 @@ class _Job(object):
                             raise exception.Err(f"No rule to make {d}")
                         child = self.dsl.job_of_target[d]
                     children.append(child.invoke(cc))
-                def task_of_invoke(this):
-                    for child in children:
-                        yield this.wait(child.task)
-                    if all(child.successed for child in children):
-                        # self.task.put() is called inside _worker()
-                        # todo: _Task, _Job, and _ThreadPool should be decoupled.
-                        yield self._enq()
-                        assert self.done.is_set(), self
-                    else:
-                        self.done.set()
-                self.task = _Task(self.dsl.task_context, task_of_invoke, data=self, priority=self.priority)
+                self.task = _Task(self.dsl.task_context, functools.partial(_task_of_invoke, self, children), data=self, priority=self.priority)
                 self.task.put()
         return self
 
@@ -835,6 +825,18 @@ def _node_of(name, node_of_name, i):
         node = "n" + str(i)
         node_of_name[name] = node
     return node, i
+
+
+def _task_of_invoke(j, children, this):
+    for child in children:
+        yield this.wait(child.task)
+    if all(child.successed for child in children):
+        # j.task.put() is called inside _worker()
+        # todo: _Task, _Job, and _ThreadPool should be decoupled.
+        yield j._enq()
+        assert j.done.is_set(), j
+    else:
+        j.done.set()
 
 
 def _escape(s):
