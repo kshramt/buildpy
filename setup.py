@@ -52,5 +52,6 @@ setup(
         "google-cloud-storage",
         "psutil",
     ],
+    data_files=[(".", ["LICENSE.txt"])],
     zip_safe=True,
 )
