@@ -414,7 +414,7 @@ class _FileJob(_Job):
 
     def _need_update(self):
         try:
-            t_ts = min(mtime_of(uri=t, use_hash=False, credential=self._credential_of(t)) for t in self.ts_unique)
+            t_ts = min(_mtime_of(uri=t, use_hash=False, credential=self._credential_of(t)) for t in self.ts_unique)
         # todo: Catch errors from S3  https://stackoverflow.com/questions/33068055/boto3-python-and-how-to-handle-errors
         except (OSError, google.cloud.exceptions.NotFound, exception.NotFound):
             # Intentionally create hash caches.
@@ -434,7 +434,7 @@ class _FileJob(_Job):
         """
         Return: the last hash time.
         """
-        return self.dsl.time_of_dep_cache.get(d, functools.partial(mtime_of, uri=d, use_hash=self._use_hash, credential=self._credential_of(d)))
+        return self.dsl.time_of_dep_cache.get(d, functools.partial(_mtime_of, uri=d, use_hash=self._use_hash, credential=self._credential_of(d)))
 
     def _credential_of(self, uri):
         meta = self.dsl.metadata[uri]
@@ -843,14 +843,14 @@ def _escape(s):
     return "\"" + "".join('\\"' if x == "\"" else x for x in s) + "\""
 
 
-def mtime_of(uri, use_hash, credential):
+def _mtime_of(uri, use_hash, credential):
     puri = DSL.uriparse(uri)
     if puri.scheme == "file":
         assert (puri.netloc == "localhost"), puri
     if puri.scheme in resource.of_scheme:
         return resource.of_scheme[puri.scheme].mtime_of(uri, credential, use_hash)
     else:
-        raise NotImplementedError(f"mtime_of({repr(uri)}) is not supported")
+        raise NotImplementedError(f"_mtime_of({repr(uri)}) is not supported")
 
 
 def _str_of_exception():
