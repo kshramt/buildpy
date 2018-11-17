@@ -19,7 +19,7 @@ setup(
     description="Make in Python",
     url="https://github.com/kshramt/buildpy",
     author="kshramt",
-    license="GPLv3",
+    license="GPL-3.0",
     packages=[
         "buildpy.v1",
         "buildpy.v2",
