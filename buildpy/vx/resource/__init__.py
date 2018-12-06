@@ -204,7 +204,7 @@ class S3(Resource):
         puri = cls._check_uri(uri)
         client = cls._client_of(credential)
         head = client.head_object(Bucket=puri.netloc, Key=puri.path[1:])
-        t_uri = head["LastModified"]
+        t_uri = head["LastModified"].timestamp()
         if not use_hash:
             return t_uri
         return _min_of_t_uri_and_t_cache(t_uri, lambda: head["ETag"], puri)
