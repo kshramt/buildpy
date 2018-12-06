@@ -19,7 +19,6 @@ import psutil
 from ._log import logger
 from . import _convenience
 from . import _tval
-from . import exception
 from . import resource
 
 
@@ -398,8 +397,7 @@ class _FileJob(_Job):
             if not (("keep" in meta) and meta["keep"]):
                 try:
                     self.dsl.rm(t)
-                # todo: Catch errors from S3  https://stackoverflow.com/questions/33068055/boto3-python-and-how-to-handle-errors
-                except (OSError, google.cloud.exceptions.NotFound, exception.NotFound) as e:
+                except resource.exceptions as e:
                     logger.info("Failed to remove %s", t)
 
     def need_update(self):
@@ -415,8 +413,7 @@ class _FileJob(_Job):
     def _need_update(self):
         try:
             t_ts = min(_mtime_of(uri=t, use_hash=False, credential=self._credential_of(t)) for t in self.ts_unique)
-        # todo: Catch errors from S3  https://stackoverflow.com/questions/33068055/boto3-python-and-how-to-handle-errors
-        except (OSError, google.cloud.exceptions.NotFound, exception.NotFound):
+        except resource.exceptions:
             # Intentionally create hash caches.
             for d in self.ds_unique:
                 self._time_of_dep_from_cache(d)

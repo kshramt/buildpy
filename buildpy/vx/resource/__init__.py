@@ -8,6 +8,9 @@ import shutil
 import threading
 import time
 
+import botocore.exceptions
+import google.cloud.exceptions
+
 from .._log import logger
 from .. import _tval
 from .. import _convenience
@@ -38,6 +41,7 @@ class Resource(abc.ABC):
 
 class LocalFile(Resource):
 
+    exceptions = (OSError,)
     scheme = "file"
 
     @classmethod
@@ -75,6 +79,7 @@ class LocalFile(Resource):
 
 class BigQuery(Resource):
 
+    exceptions = (google.cloud.exceptions.NotFound,)
     scheme = "bq"
     _tls = threading.local()
 
@@ -125,6 +130,7 @@ class BigQuery(Resource):
 
 class GoogleCloudStorage(Resource):
 
+    exceptions = (exception.NotFound,)
     scheme = "gs"
     _tls = threading.local()
 
@@ -183,6 +189,7 @@ class GoogleCloudStorage(Resource):
 
 class S3(Resource):
 
+    exceptions = (botocore.exceptions.ClientError,)
     scheme = "s3"
     _tls = threading.local()
 
@@ -238,6 +245,13 @@ of_scheme = _tval.TDict({
     GoogleCloudStorage.scheme: GoogleCloudStorage(),
     S3.scheme: S3(),
 })
+
+exceptions = (
+    LocalFile.exceptions
+    + BigQuery.exceptions
+    + GoogleCloudStorage.exceptions
+    + S3.exceptions
+)
 
 
 def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):

@@ -48,6 +48,7 @@ setup(
         "buildpy.vx.resource",
     ],
     install_requires=[
+        "boto3",
         "google-cloud-bigquery",
         "google-cloud-storage",
         "psutil",
