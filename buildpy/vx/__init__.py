@@ -22,7 +22,7 @@ from . import _tval
 from . import resource
 
 
-__version__ = "6.2.4"
+__version__ = "6.2.5"
 
 
 _PRIORITY_DEFAULT = 0
