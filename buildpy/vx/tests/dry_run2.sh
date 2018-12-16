@@ -33,17 +33,15 @@ import sys
 import buildpy.vx
 
 
-def _setup_logger():
+def _setup_logger(level):
     import logging
     logger = logging.getLogger()
     hdl = logging.StreamHandler(sys.stderr)
     hdl.setFormatter(logging.Formatter("%(levelname)s\t%(process)d\t%(asctime)s\t%(filename)s\t%(funcName)s\t%(lineno)d\t%(message)s"))
     logger.addHandler(hdl)
-    logger.setLevel(logging.DEBUG)
+    hdl.setLevel(getattr(logging, level))
+    logger.setLevel(getattr(logging, level))
     return logger
-
-
-logger = _setup_logger()
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -52,6 +50,7 @@ os.environ["PYTHON"] = sys.executable
 
 
 dsl = buildpy.vx.DSL(sys.argv, use_hash=False)
+logger = _setup_logger(dsl.args.log)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh

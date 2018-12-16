@@ -51,7 +51,7 @@ class DSL:
         assert self.args.jobs > 0
         assert self.args.load_average > 0
 
-        logger.setLevel(getattr(logging, self.args.log.upper()))
+        logger.setLevel(getattr(logging, self.args.log))
         self.job_of_target = _tval.NonOverwritableDict()
         self.jobs = _tval.TSet()
         self._use_hash = use_hash
@@ -687,8 +687,9 @@ def _parse_argv(argv):
     )
     parser.add_argument(
         "--log",
-        default="warning",
-        choices=["debug", "info", "warning", "error", "critical"],
+        default="WARNING",
+        type=str.upper,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Set log level.",
     )
     parser.add_argument(
