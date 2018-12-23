@@ -809,7 +809,7 @@ def _dependencies_dot_of(jobs):
 
 def _dependencies_json_of(jobs):
     return json.dumps(
-        [dict(ts_unique=list(j.ts_unique), ds_unique=list(j.ds_unique)) for j in sorted((j for j in jobs), key=lambda j: list(j.ts_unique))],
+        [dict(ts_unique=sorted(j.ts_unique), ds_unique=sorted(j.ds_unique)) for j in sorted((j for j in jobs), key=lambda j: sorted(j.ts_unique))],
         ensure_ascii=False,
         sort_keys=True,
     )
