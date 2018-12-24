@@ -191,32 +191,6 @@ class DSL:
 
 # Internal use only.
 
-class _Nil:
-    __slots__ = ()
-
-    def __contains__(self, x):
-        return False
-
-    def __repr__(self):
-        return "nil"
-
-
-_nil = _Nil()
-
-
-class _Cons:
-    __slots__ = ("h", "t")
-
-    def __init__(self, h, t):
-        self.h = h
-        self.t = t
-
-    def __contains__(self, x):
-        return (self.h == x) or (x in self.t)
-
-    def __repr__(self):
-        return f"({repr(self.h)} . {repr(self.t)})"
-
 
 class _Job(object):
 
@@ -289,14 +263,14 @@ class _Job(object):
             print("\t", d, sep="", file=file)
         print(file=file)
 
-    def invoke(self, call_chain=_nil):
+    def invoke(self, call_chain=()):
         logger.debug(self)
 
-        if self in call_chain:
+        if _contains(self, call_chain):
             raise exception.Err(f"A circular dependency detected: {self} for {call_chain}")
         with self.lock:
             if self.task is None:
-                cc = _Cons(self, call_chain)
+                cc = (self, call_chain)
                 children = []
                 for d in self.ds_unique:
                     try:
@@ -855,6 +829,13 @@ def _terminate_subprocesses():
 
 def _coalesce(x, default):
     return default if x is None else x
+
+
+def _contains(v, c):
+    if c:
+        return (c[0] == v) or _contains(v, c[1])
+    else:
+        return False
 
 
 def _do_nothing(*_):
