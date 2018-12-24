@@ -8,6 +8,7 @@ It has following features:
 - Integration for
     - BigQuery (`"bq://project.dataset.table"`)
     - Google Cloud Storage (`"gs://bucket/blob"`)
+    - S3(`"s3://bucket/path/to/objec"`)
 - Parallel processing (similar to `--jobs` of GNU Make)
 - Checksum-based update scheme (similar to SCons)
 - Dynamic job declaration
