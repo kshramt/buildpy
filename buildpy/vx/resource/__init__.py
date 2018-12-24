@@ -239,19 +239,20 @@ class S3(Resource):
         return puri
 
 
-of_scheme = _tval.TDict({
-    LocalFile.scheme: LocalFile(),
-    BigQuery.scheme: BigQuery(),
-    GoogleCloudStorage.scheme: GoogleCloudStorage(),
-    S3.scheme: S3(),
-})
+of_scheme = _tval.TDict(dict())
+exceptions = ()
 
-exceptions = (
-    LocalFile.exceptions
-    + BigQuery.exceptions
-    + GoogleCloudStorage.exceptions
-    + S3.exceptions
-)
+
+def register(resource):
+    global exceptions
+    of_scheme[resource.scheme] = resource()
+    exceptions += resource.exceptions
+
+
+register(LocalFile)
+register(BigQuery)
+register(GoogleCloudStorage)
+register(S3)
 
 
 def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
