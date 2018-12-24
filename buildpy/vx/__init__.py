@@ -122,7 +122,7 @@ class DSL:
             data = dict()
 
         j = _PhonyJob(
-            None,
+            _do_nothing,
             [target],
             deps,
             desc,
@@ -236,7 +236,7 @@ class _Job(object):
         self.successed = False  # True if self.execute did not raise an error
         self.serial = False
 
-        self._f = f
+        self.f = f
         self.ts = ts
         self.ds = ds
         self.desc = desc
@@ -266,19 +266,6 @@ class _Job(object):
 
     def __lt__(self, other):
         return self.priority < other.priority
-
-    @property
-    def f(self):
-        return _coalesce(self._f, _do_nothing)
-
-    @f.setter
-    def f(self, f):
-        if self._f is None:
-            self._f = f
-        elif self._f == f:
-            pass
-        else:
-            raise exception.Err(f"{self._f} for {self} is overwritten by {f}")
 
     def execute(self):
         logger.debug(self)
