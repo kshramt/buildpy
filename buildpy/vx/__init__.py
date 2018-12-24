@@ -192,7 +192,7 @@ class DSL:
 # Internal use only.
 
 
-class _Job(object):
+class _Job:
 
     def __init__(
             self,
@@ -399,7 +399,7 @@ class _FileJob(_Job):
         return meta["credential"] if "credential" in meta else None
 
 
-class _ThreadPool(object):
+class _ThreadPool:
     # It is not straightforward to support the `serial` argument by concurrent.future.
 
     def __init__(self, job_of_target, keep_going, n_max, n_serial_max, load_average, die_hooks):

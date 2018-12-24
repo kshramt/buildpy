@@ -13,7 +13,7 @@ from .. import exception
 _URI = collections.namedtuple("_URI", ["uri", "scheme", "netloc", "path", "params", "query", "fragment"])
 
 
-class cd(object):
+class cd:
     __slots__ = ["old", "new"]
 
     def __init__(self, new):

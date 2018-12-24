@@ -289,7 +289,7 @@ def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
 
 
 def _dump_hash_time_cache(cache_path, t_path, h_path):
-    logger.info(str(threading.get_ident()) + "\t" + cache_path)
+    logger.info(cache_path)
     _convenience.mkdir(_convenience.dirname(cache_path))
     with open(cache_path, "w") as fp:
         fcntl.flock(fp, fcntl.LOCK_EX)
