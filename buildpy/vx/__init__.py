@@ -13,12 +13,12 @@ import threading
 import time
 import traceback
 
-import google.cloud.exceptions
 import psutil
 
 from ._log import logger
 from . import _convenience
 from . import _tval
+from . import exception
 from . import resource
 
 
