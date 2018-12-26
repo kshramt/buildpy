@@ -20,10 +20,14 @@ It has following features:
 - Declaration of multiple targets for a single job
 - Versioned API (`buildpy.v1`, `buildpy.v2`, ...)
 
-BuildPy requires Python version ≥ 3.6 and is available from [PyPI](https://pypi.python.org/pypi/buildpy):
+BuildPy requires Python version ≥ 3.6 and is available from [PyPI](https://pypi.python.org/pypi/buildpy) and conda-forge:
 
 ```bash
+# Pip
 pip install buildpy
+
+# Conda
+conda install -c defaults -c conda-forge buildpy
 ```
 
 The typical form of `build.py` is as follows:
