@@ -65,7 +65,7 @@ def sh(
 
 
 def let(f):
-    f()
+    return f()
 
 
 def loop(*lists, tform=itertools.product):
