@@ -22,7 +22,7 @@ from . import exception
 from . import resource
 
 
-__version__ = "6.2.6"
+__version__ = "6.2.7"
 
 
 _PRIORITY_DEFAULT = 0
