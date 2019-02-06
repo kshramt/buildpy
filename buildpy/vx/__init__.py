@@ -232,7 +232,7 @@ class _Job:
         ds = self.ds
         if self.ds and (len(self.ds) > 4):
             ds = ds[:2] + [_CDOTS]
-        return f"{type(self).__name__}({self.ts}, {ds})"
+        return f"{type(self).__name__}({_cdotify(self.ts)}, {_cdotify(self.ds)})"
 
     def __call__(self, f):
         self.f = f
@@ -346,10 +346,7 @@ class _FileJob(_Job):
         self.serial = serial
 
     def __repr__(self):
-        ds = self.ds
-        if self.ds and (len(self.ds) > 4):
-            ds = ds[:2] + [_CDOTS]
-        return f"{type(self).__name__}({self.ts}, {ds}, serial={self.serial})"
+        return f"{type(self).__name__}({_cdotify(self.ts)}, {_cdotify(self.ds)}, serial={self.serial})"
 
     def rm_targets(self):
         logger.info(f"rm_targets(%s)", self.ts)
@@ -836,6 +833,12 @@ def _contains(v, c):
         return (c[0] == v) or _contains(v, c[1])
     else:
         return False
+
+
+def _cdotify(xs):
+    if xs and len(xs) > 4:
+        xs = xs[:3] + [_CDOTS]
+    return xs
 
 
 def _do_nothing(*_):
