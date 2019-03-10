@@ -248,6 +248,12 @@ cd ../..
 python build.py sdist
 ```
 
+```
+python3 -m venv venv
+venv/bin/python3 setup.py develop
+venv/bin/python3 build.py -h
+```
+
 ### TODO
 
 * v6: fully support the `--cut` argument.
