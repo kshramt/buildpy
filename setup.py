@@ -40,6 +40,13 @@ setup(
         "buildpy.v6.exception",
         "buildpy.v6.resource",
 
+        "buildpy.v7",
+        "buildpy.v7._convenience",
+        "buildpy.v7._log",
+        "buildpy.v7._tval",
+        "buildpy.v7.exception",
+        "buildpy.v7.resource",
+
         "buildpy.vx",
         "buildpy.vx._convenience",
         "buildpy.vx._log",
