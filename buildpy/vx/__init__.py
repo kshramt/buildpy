@@ -33,6 +33,7 @@ _CDOTS = "…"
 
 # Main
 
+
 class DSL:
 
     sh = staticmethod(_convenience.sh)
@@ -63,21 +64,23 @@ class DSL:
 
         self.thread_pool = _ThreadPool(
             self.job_of_target,
-            self.args.keep_going, self.args.jobs,
-            self.args.n_serial, self.args.load_average,
+            self.args.keep_going,
+            self.args.jobs,
+            self.args.n_serial,
+            self.args.load_average,
             die_hooks=[self._cleanup],
         )
 
     def file(
-            self,
-            targets,
-            deps,
-            desc=None,
-            use_hash=None,
-            serial=False,
-            priority=_PRIORITY_DEFAULT,
-            data=None,
-            cut=False,
+        self,
+        targets,
+        deps,
+        desc=None,
+        use_hash=None,
+        serial=False,
+        priority=_PRIORITY_DEFAULT,
+        data=None,
+        cut=False,
     ):
         """Declare a file job.
         Arguments:
@@ -107,13 +110,7 @@ class DSL:
         return j
 
     def phony(
-            self,
-            target,
-            deps,
-            desc=None,
-            priority=_PRIORITY_DEFAULT,
-            data=None,
-            cut=False,
+        self, target, deps, desc=None, priority=_PRIORITY_DEFAULT, data=None, cut=False
     ):
         if cut:
             return
@@ -121,15 +118,7 @@ class DSL:
         if data is None:
             data = dict()
 
-        j = _PhonyJob(
-            _do_nothing,
-            [target],
-            deps,
-            desc,
-            priority,
-            dsl=self,
-            data=data,
-        )
+        j = _PhonyJob(_do_nothing, [target], deps, desc, priority, dsl=self, data=data)
         self.jobs.add(j)
         return j
 
@@ -170,7 +159,7 @@ class DSL:
         meta = self.metadata[uri]
         credential = meta["credential"] if "credential" in meta else None
         if puri.scheme == "file":
-            assert (puri.netloc == "localhost"), puri
+            assert puri.netloc == "localhost", puri
         if puri.scheme in resource.of_scheme:
             return resource.of_scheme[puri.scheme].rm(uri, credential)
         else:
@@ -192,18 +181,9 @@ class DSL:
 # Internal use only.
 
 
-class _Job:
 
-    def __init__(
-            self,
-            f,
-            ts,
-            ds,
-            desc,
-            priority,
-            dsl,
-            data,
-    ):
+class _Job:
+    def __init__(self, f, ts, ds, desc, priority, dsl, data):
         self.lock = threading.RLock()
         self.done = threading.Event()
         self.executed = False
@@ -243,7 +223,7 @@ class _Job:
 
     def execute(self):
         logger.debug(self)
-        assert (not self.done.is_set()), self
+        assert not self.done.is_set(), self
         if self.dsl.args.dry_run:
             self.write()
         else:
@@ -267,7 +247,9 @@ class _Job:
         logger.debug(self)
 
         if _contains(self, call_chain):
-            raise exception.Err(f"A circular dependency detected: {self} for {call_chain}")
+            raise exception.Err(
+                f"A circular dependency detected: {self} for {call_chain}"
+            )
         with self.lock:
             if self.task is None:
                 cc = (self, call_chain)
@@ -276,12 +258,19 @@ class _Job:
                     try:
                         child = self.dsl.job_of_target[d]
                     except KeyError:
+
                         @self.dsl.file([self.dsl.meta(d, keep=True)], [])
                         def _(j):
                             raise exception.Err(f"No rule to make {d}")
+
                         child = self.dsl.job_of_target[d]
                     children.append(child.invoke(cc))
-                self.task = _Task(self.dsl.task_context, functools.partial(_task_of_invoke, self, children), data=self, priority=self.priority)
+                self.task = _Task(
+                    self.dsl.task_context,
+                    functools.partial(_task_of_invoke, self, children),
+                    data=self,
+                    priority=self.priority,
+                )
                 self.task.put()
         return self
 
@@ -297,51 +286,17 @@ class _Job:
 
 
 class _PhonyJob(_Job):
-    def __init__(
-            self,
-            f,
-            ts,
-            ds,
-            desc,
-            priority,
-            dsl,
-            data,
-    ):
+    def __init__(self, f, ts, ds, desc, priority, dsl, data):
         if len(ts) != 1:
-            raise exception.Err(f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}")
-        super().__init__(
-            f,
-            ts,
-            ds,
-            desc,
-            priority,
-            dsl=dsl,
-            data=data,
-        )
+            raise exception.Err(
+                f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}"
+            )
+        super().__init__(f, ts, ds, desc, priority, dsl=dsl, data=data)
 
 
 class _FileJob(_Job):
-    def __init__(
-            self,
-            f,
-            ts,
-            ds,
-            desc,
-            use_hash,
-            serial,
-            priority,
-            dsl,
-            data,
-    ):
-        super().__init__(
-            f,
-            ts,
-            ds,
-            desc,
-            priority,
-            dsl=dsl,
-            data=data,
-        )
+    def __init__(self, f, ts, ds, desc, use_hash, serial, priority, dsl, data):
+        super().__init__(f, ts, ds, desc, priority, dsl=dsl, data=data)
         self._use_hash = use_hash
         self.serial = serial
 
@@ -370,7 +325,10 @@ class _FileJob(_Job):
 
     def _need_update(self):
         try:
-            t_ts = min(_mtime_of(uri=t, use_hash=False, credential=self._credential_of(t)) for t in self.ts_unique)
+            t_ts = min(
+                _mtime_of(uri=t, use_hash=False, credential=self._credential_of(t))
+                for t in self.ts_unique
+            )
         except resource.exceptions:
             # Intentionally create hash caches.
             for d in self.ds_unique:
@@ -378,7 +336,13 @@ class _FileJob(_Job):
             return True
         # Intentionally create hash caches.
         # Do not use `any`.
-        return max((self._time_of_dep_from_cache(d) for d in self.ds_unique), default=-float('inf')) > t_ts
+        return (
+            max(
+                (self._time_of_dep_from_cache(d) for d in self.ds_unique),
+                default=-float("inf"),
+            )
+            > t_ts
+        )
         # Use of `>` instead of `>=` is intentional.
         # In theory, t_deps < t_targets if targets were made from deps, and thus you might expect ≮ (>=).
         # However, t_deps > t_targets should hold if the deps have modified *after* the creation of the targets.
@@ -389,7 +353,15 @@ class _FileJob(_Job):
         """
         Return: the last hash time.
         """
-        return self.dsl.time_of_dep_cache.get(d, functools.partial(_mtime_of, uri=d, use_hash=self._use_hash, credential=self._credential_of(d)))
+        return self.dsl.time_of_dep_cache.get(
+            d,
+            functools.partial(
+                _mtime_of,
+                uri=d,
+                use_hash=self._use_hash,
+                credential=self._credential_of(d),
+            ),
+        )
 
     def _credential_of(self, uri):
         meta = self.dsl.metadata[uri]
@@ -399,7 +371,9 @@ class _FileJob(_Job):
 class _ThreadPool:
     # It is not straightforward to support the `serial` argument by concurrent.future.
 
-    def __init__(self, job_of_target, keep_going, n_max, n_serial_max, load_average, die_hooks):
+    def __init__(
+        self, job_of_target, keep_going, n_max, n_serial_max, load_average, die_hooks
+    ):
         assert n_max > 0
         assert n_serial_max > 0
         self.deferred_errors = queue.Queue()
@@ -422,11 +396,9 @@ class _ThreadPool:
             return
         self._enq_job(j)
         with self._threads_loc:
-            if (
-                    len(self._threads) < 1 or (
-                        len(self._threads) < self._n_max and
-                        os.getloadavg()[0] <= self._load_average
-                    )
+            if len(self._threads) < 1 or (
+                len(self._threads) < self._n_max
+                and os.getloadavg()[0] <= self._load_average
             ):
                 t = threading.Thread(target=self._worker, daemon=True)
                 self._threads.add(t)
@@ -466,6 +438,7 @@ class _ThreadPool:
                     except queue.Empty:
                         break
                 logger.debug("working on %s", j)
+
                 def _post_exception():
                     logger.error(j)
                     e_str = _str_of_exception()
@@ -475,6 +448,7 @@ class _ThreadPool:
                         self.deferred_errors.put((j, e_str))
                     else:
                         self._die(e_str)
+
                 try:
                     need_update = j.need_update()
                 except:
@@ -484,8 +458,8 @@ class _ThreadPool:
                     assert self._n_running.val() >= 0
                     if math.isfinite(self._load_average):
                         while (
-                                self._n_running.val() > 0 and
-                                os.getloadavg()[0] > self._load_average
+                            self._n_running.val() > 0
+                            and os.getloadavg()[0] > self._load_average
                         ):
                             time.sleep(1)
                     self._n_running.inc()
@@ -515,7 +489,7 @@ class _ThreadPool:
                     self._unwaited_threads.remove(threading.current_thread())
                 except KeyError:
                     pass
-        except Exception as e: # Propagate Exception caused by a bug in buildpy code to the main thread.
+        except Exception as e:  # Propagate Exception caused by a bug in buildpy code to the main thread.
             e_str = _str_of_exception()
             self._die(e_str)
 
@@ -565,7 +539,6 @@ class _TaskContext:
 
 
 class _Task:
-
     def __init__(self, ctx, f, data=None, priority=_PRIORITY_DEFAULT):
         self._ctx = ctx
         # `f` should behave as if a generator.
@@ -633,15 +606,12 @@ class _Task:
 
 
 def _parse_argv(argv):
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument(
-        "targets",
-        nargs="*",
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
+    parser.add_argument("targets", nargs="*")
     parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {__version__}",
+        "--version", action="version", version=f"%(prog)s {__version__}"
     )
     parser.add_argument(
         "--log",
@@ -651,62 +621,64 @@ def _parse_argv(argv):
         help="Set log level.",
     )
     parser.add_argument(
-        "-j", "--jobs",
-        type=int,
-        default=1,
-        help="Number of parallel external jobs.",
+        "-j", "--jobs", type=int, default=1, help="Number of parallel external jobs."
     )
     parser.add_argument(
-        "--n-serial",
-        type=int,
-        default=1,
-        help="Number of parallel serial jobs.",
+        "--n-serial", type=int, default=1, help="Number of parallel serial jobs."
     )
     parser.add_argument(
-        "-l", "--load-average",
+        "-l",
+        "--load-average",
         type=float,
         default=float("inf"),
         help="No new job is started if there are other running jobs and the load average is higher than the specified value.",
     )
     parser.add_argument(
-        "-k", "--keep-going",
+        "-k",
+        "--keep-going",
         action="store_true",
         default=False,
         help="Keep going unrelated jobs even if some jobs fail.",
     )
     parser.add_argument(
-        "-D", "--descriptions",
+        "-D",
+        "--descriptions",
         action="store_true",
         default=False,
         help="Print descriptions, then exit.",
     )
     parser.add_argument(
-        "-P", "--dependencies",
+        "-P",
+        "--dependencies",
         action="store_true",
         default=False,
         help="Print dependencies, then exit.",
     )
     parser.add_argument(
-        "-Q", "--dependencies-dot",
+        "-Q",
+        "--dependencies-dot",
         type=str,
         const="/dev/stdout",
         nargs="?",
         help=f"Print dependencies in the DOT format, then exit. {os.path.basename(sys.executable)} build.py -Q | dot -Tpdf -Grankdir=LR -Nshape=plaintext -Ecolor='#00000088' >| workflow.pdf",
     )
     parser.add_argument(
-        "-J", "--dependencies-json",
+        "-J",
+        "--dependencies-json",
         type=str,
         const="/dev/stdout",
         nargs="?",
         help=f"Print dependencies in the JSON format, then exit. {os.path.basename(sys.executable)} build.py -J | jq .",
     )
     parser.add_argument(
-        "-n", "--dry-run",
-        action="store_true",
-        default=False,
-        help="Dry-run.",
+        "-n", "--dry-run", action="store_true", default=False, help="Dry-run."
     )
-    parser.add_argument("--cut", action="append", help="Cut the DAG at the job of the specified resource. You can specify --cut=target multiple times.")
+    parser.add_argument(
+        "--cut",
+        action="append",
+        help="Cut the DAG at the job of the specified resource. You can specify --cut=target multiple times.",
+    )
+    )
     args = parser.parse_args(argv)
     assert args.jobs > 0
     assert args.n_serial > 0
@@ -745,7 +717,7 @@ def _dependencies_dot_of(jobs):
         i += 1
         i_cluster += 1
         action_node = "n" + str(i)
-        print(action_node + "[label=\"○\"]", file=fp)
+        print(action_node + '[label="○"]', file=fp)
 
         for name in sorted(datum["ts_unique"]):
             node, i = _node_of(name, node_of_name, i)
@@ -767,7 +739,10 @@ def _dependencies_dot_of(jobs):
 
 def _dependencies_json_of(jobs):
     return json.dumps(
-        [dict(ts_unique=sorted(j.ts_unique), ds_unique=sorted(j.ds_unique)) for j in sorted((j for j in jobs), key=lambda j: sorted(j.ts_unique))],
+        [
+            dict(ts_unique=sorted(j.ts_unique), ds_unique=sorted(j.ds_unique))
+            for j in sorted((j for j in jobs), key=lambda j: sorted(j.ts_unique))
+        ],
         ensure_ascii=False,
         sort_keys=True,
     )
@@ -796,13 +771,13 @@ def _task_of_invoke(j, children, this):
 
 
 def _escape(s):
-    return "\"" + "".join('\\"' if x == "\"" else x for x in s) + "\""
+    return '"' + "".join('\\"' if x == '"' else x for x in s) + '"'
 
 
 def _mtime_of(uri, use_hash, credential):
     puri = DSL.uriparse(uri)
     if puri.scheme == "file":
-        assert (puri.netloc == "localhost"), puri
+        assert puri.netloc == "localhost", puri
     if puri.scheme in resource.of_scheme:
         return resource.of_scheme[puri.scheme].mtime_of(uri, credential, use_hash)
     else:
