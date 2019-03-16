@@ -29,6 +29,7 @@ python = os.environ["PYTHON"]
 
 dsl = buildpy.vx.DSL(sys.argv)
 logger = _setup_logger(dsl.args.log)
+logger.info(dsl.id_dsl)
 file = dsl.file
 phony = dsl.phony
 loop = dsl.loop

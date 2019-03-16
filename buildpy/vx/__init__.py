@@ -1,6 +1,8 @@
 import _thread
 import argparse
+import datetime
 import functools
+import itertools
 import io
 import json
 import logging
@@ -12,6 +14,7 @@ import sys
 import threading
 import time
 import traceback
+import uuid
 
 import psutil
 
@@ -48,6 +51,11 @@ class DSL:
     uriparse = staticmethod(_convenience.uriparse)
 
     def __init__(self, argv, use_hash=True, terminate_subprocesses=True):
+        self.id_dsl = (
+            datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            + "-"
+            + str(uuid.uuid4())
+        )
         self.args = _parse_argv(argv[1:])
         assert self.args.jobs > 0
         assert self.args.load_average > 0
@@ -69,6 +77,42 @@ class DSL:
             self.args.n_serial,
             self.args.load_average,
             die_hooks=[self._cleanup],
+        )
+
+        self.execution_log_dir = (
+            None
+            if self.args.execution_log_dir is None
+            else _convenience.jp(self.args.execution_log_dir, self.id_dsl)
+        )
+        if self.execution_log_dir:
+            _convenience.mkdir(self.execution_log_dir)
+            with open(_convenience.jp(self.execution_log_dir, "meta.json"), "w") as fp:
+                json.dump(
+                    dict(
+                        args=vars(self.args),
+                        executable=sys.executable,
+                        id_dsl=self.id_dsl,
+                        version=sys.version,
+                    ),
+                    fp,
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                )
+        self.execution_logger_defined = _ExecutionLogger(
+            self.execution_log_dir, "defined.jsonl"
+        )
+        self.execution_logger_invoked = _ExecutionLogger(
+            self.execution_log_dir, "invoked.jsonl"
+        )
+        self.execution_logger_enqueued = _ExecutionLogger(
+            self.execution_log_dir, "enqueued.jsonl"
+        )
+        self.execution_logger_executed = _ExecutionLogger(
+            self.execution_log_dir, "executed.jsonl"
+        )
+        self.execution_logger_done = _ExecutionLogger(
+            self.execution_log_dir, "done.jsonl"
         )
 
     def file(
@@ -181,6 +225,28 @@ class DSL:
 # Internal use only.
 
 
+class _ExecutionLogger:
+    def __init__(self, dir_, file):
+        if dir_:
+            self.path = _convenience.jp(dir_, file)
+            _convenience.mkdir(_convenience.dirname(self.path))
+            self.fp = open(self.path, "w")
+            self.counter = itertools.count(1)
+            self.queue = queue.Queue()
+            self.processor = threading.Thread(target=self._worker, daemon=True)
+            self.processor.start()
+        else:
+            self.queue = queue.Queue(maxsize=0)  # to support `al.queue.put(x)`
+
+    def _worker(self):
+        while True:
+            x = self.queue.get(block=True)
+            x = _set_unique(x, "t", datetime.datetime.utcnow().isoformat())
+            x = _set_unique(x, "i", next(self.counter))
+            json.dump(x, self.fp, ensure_ascii=False, sort_keys=True)
+            self.fp.write("\n")
+            self.fp.flush()
+
 
 class _Job:
     def __init__(self, f, ts, ds, desc, priority, dsl, data):
@@ -207,6 +273,8 @@ class _Job:
 
         # User data.
         self.data = _tval.ddict(data)
+        self._data = data
+        dsl.execution_logger_defined.queue.put(self.to_execution_log_data())
 
     def __repr__(self):
         ds = self.ds
@@ -228,6 +296,7 @@ class _Job:
             self.write()
         else:
             self.f(self)
+        self.dsl.execution_logger_executed.queue.put(self.to_execution_log_data())
 
     def rm_targets(self):
         pass
@@ -252,6 +321,9 @@ class _Job:
             )
         with self.lock:
             if self.task is None:
+                self.dsl.execution_logger_invoked.queue.put(
+                    self.to_execution_log_data()
+                )
                 cc = (self, call_chain)
                 children = []
                 for d in self.ds_unique:
@@ -282,7 +354,19 @@ class _Job:
     def _enq(self):
         logger.debug(self)
         self.dsl.thread_pool.push_job(self)
+        self.dsl.execution_logger_enqueued.queue.put(self.to_execution_log_data())
         return self
+
+    def to_execution_log_data(self):
+        return dict(
+            data=self._data,
+            desc=self.desc,
+            ds=self.ds,
+            priority=self.priority,
+            serial=self.serial,
+            successed=self.successed,
+            ts=self.ts,
+        )
 
 
 class _PhonyJob(_Job):
@@ -477,6 +561,7 @@ class _ThreadPool:
                     else:
                         j.successed = True
                 j.done.set()
+                j.dsl.execution_logger_done.queue.put(j.to_execution_log_data())
                 j.task.put()
                 if j.serial:
                     self._serial_queue_lock.release()
@@ -678,7 +763,12 @@ def _parse_argv(argv):
         action="append",
         help="Cut the DAG at the job of the specified resource. You can specify --cut=target multiple times.",
     )
+    parser.add_argument(
+        "--execution_log_dir",
+        default=None,
+        help="Directory to store the execution logs.",
     )
+    parser.add_argument("--message", default="", help="Message.")
     args = parser.parse_args(argv)
     assert args.jobs > 0
     assert args.n_serial > 0
@@ -687,7 +777,7 @@ def _parse_argv(argv):
         args.targets.append("all")
     if args.cut is None:
         args.cut = set()
-    args.cut = set(args.cut)
+    args.cut = sorted(set(args.cut))
     return args
 
 
@@ -808,6 +898,13 @@ def _contains(v, c):
         return (c[0] == v) or _contains(v, c[1])
     else:
         return False
+
+
+def _set_unique(d, k, v):
+    if k in d:
+        raise exception.Err(f"{repr(k)} in {repr(d)}")
+    d[k] = v
+    return d
 
 
 def _cdotify(xs):
