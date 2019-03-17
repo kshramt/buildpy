@@ -49,6 +49,7 @@ class DSL:
     cd = staticmethod(_convenience.cd)
     serialize = staticmethod(_convenience.serialize)
     uriparse = staticmethod(_convenience.uriparse)
+    hash_dir_of = staticmethod(_convenience.hash_dir_of)
 
     def __init__(self, argv, use_hash=True, terminate_subprocesses=True):
         self.id_dsl = (

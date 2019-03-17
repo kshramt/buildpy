@@ -1,4 +1,5 @@
 import collections
+import hashlib
 import inspect
 import io
 import itertools
@@ -226,3 +227,12 @@ def serialize(x):
 
     _save(x)
     return fp.getvalue()
+
+
+def hash_dir_of(x):
+    h = _hash_of(x)
+    return jp(h[:2], h[2:])
+
+
+def _hash_of(x):
+    return hashlib.sha1(serialize(x).encode()).hexdigest()
