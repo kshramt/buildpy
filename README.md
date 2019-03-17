@@ -125,6 +125,10 @@ dsl.run()
 
 ## News
 
+### v7.0.0
+
+- Add `DSL.check_existence_only`.
+
 ### v6.2.0
 
 - Make the termination of subprocesses optional.

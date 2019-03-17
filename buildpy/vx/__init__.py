@@ -197,6 +197,9 @@ class DSL:
         self.metadata[uri] = kwargs
         return uri
 
+    def check_existence_only(self, uri):
+        return dict(uri=uri, meta=dict(check_existence_only=True))
+
     def rm(self, uri):
         logger.info(uri)
         puri = self.uriparse(uri)
@@ -255,6 +258,16 @@ class _Job:
         self.executed = False
         self.successed = False  # True if self.execute did not raise an error
         self.serial = False
+        self.metadata = _tval.TDefaultDict()
+
+        new_ds = []
+        for d in ds:
+            if isinstance(d, dict):
+                self.metadata[d["uri"]] = d["meta"]
+                new_ds.append(d["uri"])
+            else:
+                new_ds.append(d)
+        ds = new_ds
 
         self.f = f
         self.ts = ts
@@ -412,6 +425,11 @@ class _FileJob(_Job):
         t_ds = -float("inf")
         for d in self.ds_unique:
             t = self._time_of_dep_from_cache(d)
+            if (
+                "check_existence_only" in self.metadata[d]
+                and self.metadata[d]["check_existence_only"]
+            ):
+                t = -float("inf")
             if t > t_ds:
                 t_ds = t
         try:
