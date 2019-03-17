@@ -73,5 +73,4 @@ if __name__ == '__main__':
 EOF
 
 
-
-timeout 10 sh -c '"$PYTHON" build.py 2> /dev/null || :'
+timeout 10 sh -c 'if "$PYTHON" build.py 2> /dev/null ; then echo should fail; exit 1 ; fi'

@@ -391,7 +391,7 @@ class _FileJob(_Job):
         logger.info(f"rm_targets(%s)", self.ts)
         for t in self.ts_unique:
             meta = self.dsl.metadata[t]
-            if not (("keep" in meta) and meta["keep"]):
+            if not ("keep" in meta and meta["keep"]):
                 try:
                     self.dsl.rm(t)
                 except resource.exceptions as e:
@@ -408,25 +408,20 @@ class _FileJob(_Job):
         return self._need_update()
 
     def _need_update(self):
+        # Intentionally create hash caches for the all ds_unique.
+        t_ds = -float("inf")
+        for d in self.ds_unique:
+            t = self._time_of_dep_from_cache(d)
+            if t > t_ds:
+                t_ds = t
         try:
             t_ts = min(
                 _mtime_of(uri=t, use_hash=False, credential=self._credential_of(t))
                 for t in self.ts_unique
             )
         except resource.exceptions:
-            # Intentionally create hash caches.
-            for d in self.ds_unique:
-                self._time_of_dep_from_cache(d)
             return True
-        # Intentionally create hash caches.
-        # Do not use `any`.
-        return (
-            max(
-                (self._time_of_dep_from_cache(d) for d in self.ds_unique),
-                default=-float("inf"),
-            )
-            > t_ts
-        )
+        return t_ds > t_ts
         # Use of `>` instead of `>=` is intentional.
         # In theory, t_deps < t_targets if targets were made from deps, and thus you might expect ≮ (>=).
         # However, t_deps > t_targets should hold if the deps have modified *after* the creation of the targets.
