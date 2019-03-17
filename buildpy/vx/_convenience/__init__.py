@@ -10,7 +10,9 @@ import urllib
 from .. import exception
 
 
-_URI = collections.namedtuple("_URI", ["uri", "scheme", "netloc", "path", "params", "query", "fragment"])
+_URI = collections.namedtuple(
+    "_URI", ["uri", "scheme", "netloc", "path", "params", "query", "fragment"]
+)
 
 
 class cd:
@@ -40,15 +42,15 @@ class cd:
 
 
 def sh(
-        s,
-        check=True,
-        encoding="utf-8",
-        env=None,
-        executable="/bin/bash",
-        shell=True,
-        universal_newlines=True,
-        quiet=False,
-        **kwargs,
+    s,
+    check=True,
+    encoding="utf-8",
+    env=None,
+    executable="/bin/bash",
+    shell=True,
+    universal_newlines=True,
+    quiet=False,
+    **kwargs,
 ):
     if not quiet:
         print(s, file=sys.stderr)
@@ -94,9 +96,11 @@ def loop(*lists, tform=itertools.product):
     1 a
     2 b
     """
+
     def deco(f):
         for xs in tform(*lists):
             f(*xs)
+
     return deco
 
 
@@ -144,7 +148,15 @@ def uriparse(uri):
         netloc = "localhost"
     if (scheme == "file") and (netloc != "localhost"):
         raise exception.Err("netloc of a file URI should be localhost: {uri}")
-    return _URI(uri=uri, scheme=scheme, netloc=netloc, path=path, params=params, query=query, fragment=fragment)
+    return _URI(
+        uri=uri,
+        scheme=scheme,
+        netloc=netloc,
+        path=path,
+        params=params,
+        query=query,
+        fragment=fragment,
+    )
 
 
 def serialize(x):
