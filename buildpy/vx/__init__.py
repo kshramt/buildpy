@@ -828,10 +828,11 @@ def _dependencies_dot_of(jobs):
             print(node + "[label=" + _escape(name) + "]", file=fp)
             print(node + " -> " + action_node, file=fp)
 
-        print(f"subgraph cluster_{i_cluster}" "{", file=fp)
-        for name in sorted(datum["ts_unique"]):
-            print(node_of_name[name], file=fp)
-        print("}", file=fp)
+        if len(datum["ts_unique"]) > 1:
+            print(f"subgraph cluster_{i_cluster}" "{", file=fp)
+            for name in sorted(datum["ts_unique"]):
+                print(node_of_name[name], file=fp)
+            print("}", file=fp)
 
         for name in sorted(datum["ds_unique"]):
             node, i = _node_of(name, node_of_name, i)
