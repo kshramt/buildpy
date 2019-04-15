@@ -271,9 +271,6 @@ class _Job:
         self.priority = priority
         self.dsl = dsl
 
-        self.ts_unique = set(self.ts)
-        self.ds_unique = set(self.ds)
-
         self.task = None
 
         for t in self.ts:
@@ -339,7 +336,7 @@ class _Job:
                 )
                 cc = (self, call_chain)
                 children = []
-                for d in self.ds_unique:
+                for d in set(self.ds):
                     try:
                         child = self.dsl.job_of_target[d]
                     except KeyError:
@@ -402,7 +399,7 @@ class _FileJob(_Job):
 
     def rm_targets(self):
         logger.info(f"rm_targets(%s)", self.ts)
-        for t in self.ts_unique:
+        for t in set(self.ts):
             meta = self.dsl.metadata[t]
             if not ("keep" in meta and meta["keep"]):
                 try:
@@ -412,7 +409,7 @@ class _FileJob(_Job):
 
     def need_update(self):
         if self.dsl.args.dry_run:
-            for d in self.ds_unique:
+            for d in set(self.ds):
                 try:
                     if self.dsl.job_of_target[d].executed:
                         return True
@@ -421,9 +418,9 @@ class _FileJob(_Job):
         return self._need_update()
 
     def _need_update(self):
-        # Intentionally create hash caches for the all ds_unique.
+        # Intentionally create hash caches for the all set(self.ds).
         t_ds = -float("inf")
-        for d in self.ds_unique:
+        for d in set(self.ds):
             t = self._time_of_dep_from_cache(d)
             if (
                 "check_existence_only" in self.metadata[d]
@@ -435,7 +432,7 @@ class _FileJob(_Job):
         try:
             t_ts = min(
                 _mtime_of(uri=t, use_hash=False, credential=self._credential_of(t))
-                for t in self.ts_unique
+                for t in set(self.ts)
             )
         except resource.exceptions:
             return True
@@ -795,7 +792,7 @@ def _parse_argv(argv):
 
 
 def _print_descriptions(jobs):
-    for t, desc in sorted((t, j.desc) for j in jobs for t in j.ts_unique):
+    for t, desc in sorted((t, j.desc) for j in jobs for t in set(j.ts)):
         print(t)
         if desc is not None:
             for l in desc.split("\n"):
@@ -803,8 +800,8 @@ def _print_descriptions(jobs):
 
 
 def _print_dependencies(jobs):
-    # sorted(j.ts_unique) is used to make the output deterministic
-    for j in sorted(jobs, key=lambda j: sorted(j.ts_unique)):
+    # sorted(set(j.ts)) is used to make the output deterministic
+    for j in sorted(jobs, key=lambda j: sorted(set(j.ts))):
         j.write()
 
 
@@ -844,8 +841,8 @@ def _dependencies_dot_of(jobs):
 def _dependencies_json_of(jobs):
     return json.dumps(
         [
-            dict(ts_unique=sorted(j.ts_unique), ds_unique=sorted(j.ds_unique))
-            for j in sorted((j for j in jobs), key=lambda j: sorted(j.ts_unique))
+            dict(ts_unique=sorted(set(j.ts)), ds_unique=sorted(set(j.ds)))
+            for j in sorted((j for j in jobs), key=lambda j: sorted(set(j.ts)))
         ],
         ensure_ascii=False,
         sort_keys=True,
