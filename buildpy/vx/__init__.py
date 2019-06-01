@@ -193,7 +193,7 @@ class DSL:
         return uri
 
     def check_existence_only(self, uri):
-        return dict(uri=uri, meta=dict(check_existence_only=True))
+        return _with_meta(uri, check_existence_only=True)
 
     def rm(self, uri):
         logger.info(uri)
@@ -255,25 +255,18 @@ class _Job:
         self.serial = False
         self.metadata = _tval.TDefaultDict()
 
-        new_ds = []
-        for d in ds:
-            if isinstance(d, dict):
-                self.metadata[d["uri"]] = d["meta"]
-                new_ds.append(d["uri"])
-            else:
-                new_ds.append(d)
-        ds = new_ds
-
         self.f = f
-        self.ts = ts
-        self.ds = ds
+        self.ts = _de_with_meta(self.metadata, ts)
+        self.ds = _de_with_meta(self.metadata, ds)
+        self.ts_unique = _unique_of(self.ts)
+        self.ds_unique = _unique_of(self.ds)
         self.desc = desc
         self.priority = priority
         self.dsl = dsl
 
         self.task = None
 
-        for t in self.ts:
+        for t in self.ts_unique:
             self.dsl.job_of_target[t] = self
 
         # User data.
@@ -287,10 +280,7 @@ class _Job:
         dsl.execution_logger_defined.queue.put(self.to_execution_log_data())
 
     def __repr__(self):
-        ds = self.ds
-        if self.ds and (len(self.ds) > 4):
-            ds = ds[:2] + [_CDOTS]
-        return f"{type(self).__name__}({_cdotify(self.ts)}, {_cdotify(self.ds)})"
+        return f"{type(self).__name__}({_cdotify(self.ts_unique)}, {_cdotify(self.ds_unique)})"
 
     def __call__(self, f):
         self.f = f
@@ -316,9 +306,9 @@ class _Job:
 
     def write(self, file=sys.stdout):
         logger.debug(self)
-        for t in self.ts:
+        for t in self.ts_unique:
             print(t, file=file)
-        for d in self.ds:
+        for d in self.ds_unique:
             print("\t", d, sep="", file=file)
         print(file=file)
 
@@ -336,7 +326,7 @@ class _Job:
                 )
                 cc = (self, call_chain)
                 children = []
-                for d in set(self.ds):
+                for d in self.ds_unique:
                     try:
                         child = self.dsl.job_of_target[d]
                     except KeyError:
@@ -381,7 +371,7 @@ class _Job:
 
 class _PhonyJob(_Job):
     def __init__(self, f, ts, ds, desc, priority, dsl, data):
-        if len(ts) != 1:
+        if not (isinstance(ts, list) and len(ts) == 1):
             raise exception.Err(
                 f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}"
             )
@@ -395,11 +385,11 @@ class _FileJob(_Job):
         self.serial = serial
 
     def __repr__(self):
-        return f"{type(self).__name__}({_cdotify(self.ts)}, {_cdotify(self.ds)}, serial={self.serial})"
+        return f"{type(self).__name__}({_cdotify(self.ts_unique)}, {_cdotify(self.ds_unique)}, serial={self.serial})"
 
     def rm_targets(self):
         logger.info(f"rm_targets(%s)", self.ts)
-        for t in set(self.ts):
+        for t in self.ts_unique:
             meta = self.dsl.metadata[t]
             if not ("keep" in meta and meta["keep"]):
                 try:
@@ -409,7 +399,7 @@ class _FileJob(_Job):
 
     def need_update(self):
         if self.dsl.args.dry_run:
-            for d in set(self.ds):
+            for d in self.ds_unique:
                 try:
                     if self.dsl.job_of_target[d].executed:
                         return True
@@ -420,7 +410,7 @@ class _FileJob(_Job):
     def _need_update(self):
         # Intentionally create hash caches for the all set(self.ds).
         t_ds = -float("inf")
-        for d in set(self.ds):
+        for d in self.ds_unique:
             t = self._time_of_dep_from_cache(d)
             if (
                 "check_existence_only" in self.metadata[d]
@@ -432,7 +422,7 @@ class _FileJob(_Job):
         try:
             t_ts = min(
                 _mtime_of(uri=t, use_hash=False, credential=self._credential_of(t))
-                for t in set(self.ts)
+                for t in self.ts_unique
             )
         except resource.exceptions:
             return True
@@ -700,6 +690,12 @@ class _Task:
                 break
 
 
+class _WithMeta:
+    def __init__(self, val, **kwargs):
+        self.val = val
+        self.meta = kwargs
+
+
 def _parse_argv(argv):
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -792,7 +788,7 @@ def _parse_argv(argv):
 
 
 def _print_descriptions(jobs):
-    for t, desc in sorted((t, j.desc) for j in jobs for t in set(j.ts)):
+    for t, desc in sorted((t, j.desc) for j in jobs for t in j.ts_unique):
         print(t)
         if desc is not None:
             for l in desc.split("\n"):
@@ -800,8 +796,8 @@ def _print_descriptions(jobs):
 
 
 def _print_dependencies(jobs):
-    # sorted(set(j.ts)) is used to make the output deterministic
-    for j in sorted(jobs, key=lambda j: sorted(set(j.ts))):
+    # sorted(j.ts_unique) is used to make the output deterministic
+    for j in sorted(jobs, key=lambda j: j.ts_unique):
         j.write()
 
 
@@ -841,8 +837,8 @@ def _dependencies_dot_of(jobs):
 def _dependencies_json_of(jobs):
     return json.dumps(
         [
-            dict(ts_unique=sorted(set(j.ts)), ds_unique=sorted(set(j.ds)))
-            for j in sorted((j for j in jobs), key=lambda j: sorted(set(j.ts)))
+            dict(ts_unique=j.ts_unique, ds_unique=j.ds_unique)
+            for j in sorted((j for j in jobs), key=lambda j: j.ts_unique)
         ],
         ensure_ascii=False,
         sort_keys=True,
@@ -898,6 +894,44 @@ def _terminate_subprocesses():
             p.terminate()
         except Exception:
             pass
+
+
+def _with_meta(x, **kwargs):
+    if isinstance(x, _WithMeta):
+        return _WithMeta(x.val, {**x.meta, **kwargs})
+    else:
+        return _WithMeta(x, **kwargs)
+
+
+def _de_with_meta(metadata, x):
+    def impl(x):
+        if isinstance(x, _WithMeta):
+            metadata[x.val] = x.meta
+            return x.val
+        elif isinstance(x, list):
+            return [impl(v) for v in x]
+        elif isinstance(x, dict):
+            return {k: impl(v) for k, v in x.items()}
+        else:
+            return x
+    return impl(x)
+
+
+def _unique_of(xs):
+    ret = set()
+
+    def impl(x):
+        if isinstance(x, list):
+            for y in x:
+                impl(y)
+        elif isinstance(x, dict):
+            for y in x.values():
+                impl(y)
+        else:
+            ret.add(x)
+
+    impl(xs)
+    return sorted(ret)
 
 
 def _coalesce(x, default):

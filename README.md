@@ -125,9 +125,13 @@ dsl.run()
 
 ## News
 
+### v7.1.0
+
+- Support specifying targets and dependencies as `dict`s.
+
 ### v7.0.0
 
-. Support machine readable logging (`--execution_log_dir <dir>`).
+- Support machine readable logging (`--execution_log_dir <dir>`).
 - Add `DSL.check_existence_only`.
 
 ### v6.2.0

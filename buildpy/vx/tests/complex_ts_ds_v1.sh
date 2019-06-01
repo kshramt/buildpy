@@ -45,49 +45,50 @@ sh = dsl.sh
 rm = dsl.rm
 
 
-phony("all", ["check"], desc="Default target")
-phony("check", ["t1.done", "t2.done"], desc="Run tests")
-
-@file(["t2.done"], ["t2"], desc="Test 2")
+@file(dict(a="a",b="b"), dict(p="p", q=["q1", "q2"]))
 def _(j):
-    pass
+    sh(
+        f"""
+        cat "{j.ds["p"]}" >| "{j.ts["a"]}"
+        cat "{j.ds["q"][0]}" >| "{j.ts["b"]}"
+        """
+    )
 
-@file(["t1.done"], ["t1"], desc="Test 1")
-def _(j):
-    pass
 
-@file(["t2", "t1"], ["u2", "u1"])
+@file(["p", [dict(q1="q1", q2=["q2"])]], dict())
 def _(j):
-    pass
+    sh(
+        f"""
+        touch "{j.ts[0]}"
+        touch "{j.ts[1][0]["q1"]}"
+        touch "{j.ts[1][0]["q2"][0]}"
+        """
+    )
+
+
+phony("all", ["b"])
 
 
 if __name__ == '__main__':
     dsl.run()
 EOF
 
-cat <<EOF > expect
+"$PYTHON" build.py 2> /dev/null
+cat <<EOF > expected
+a
+b
+	p
+	q1
+	q2
+
 all
-	check
+	b
 
-check
-	t1.done
-	t2.done
-
-t1
-t2
-	u1
-	u2
-
-t1.done
-	t1
-
-t2.done
-	t2
+p
+q1
+q2
 
 EOF
 
-touch u1 u2
-
 "$PYTHON" build.py -P > actual
-
-git diff --color-words --no-index --word-diff expect actual
+git diff --color-words --no-index --word-diff expected actual
