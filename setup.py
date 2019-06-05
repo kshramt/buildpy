@@ -19,7 +19,6 @@ setup(
     description="Make in Python",
     url="https://github.com/kshramt/buildpy",
     author="kshramt",
-    license="GPL-3.0",
     packages=[
         "buildpy.v1",
         "buildpy.v2",
@@ -59,6 +58,9 @@ setup(
         "google-cloud-bigquery",
         "google-cloud-storage",
         "psutil",
+    ],
+    classifiers=[
+        'License :: OSI Approved :: GNU General Public License v3 (GPLv3)'
     ],
     data_files=[(".", ["LICENSE.txt"])],
     zip_safe=True,
