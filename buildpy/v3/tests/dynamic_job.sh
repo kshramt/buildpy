@@ -46,7 +46,7 @@ chmod u+x main.sh
 
 
 cat <<EOF > build.py
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import datetime
 import os

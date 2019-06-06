@@ -25,7 +25,7 @@ cd "$tmp_dir"
 
 
 cat <<EOF > build.py
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import logging
 import os

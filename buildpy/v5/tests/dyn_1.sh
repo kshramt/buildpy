@@ -22,7 +22,7 @@ trap finalize EXIT
 
 
 cat <<EOF > "$tmp_dir"/build.py
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import os
 import sys
