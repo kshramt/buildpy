@@ -287,7 +287,7 @@ class _Job:
         return self
 
     def __lt__(self, other):
-        return self.priority < other.priority
+        return (self.serial and not other.serial) or self.priority < other.priority
 
     def execute(self):
         logger.debug(self)
@@ -341,7 +341,7 @@ class _Job:
                     self.dsl.task_context,
                     functools.partial(_task_of_invoke, self, children),
                     data=self,
-                    priority=self.priority,
+                    lt=_task_lt,
                 )
                 self.task.put()
         return self
@@ -623,13 +623,17 @@ class _TaskContext:
                 pass
 
 
+def _false_lt(s, o):
+    return False
+
+
 class _Task:
-    def __init__(self, ctx, f, data=None, priority=_PRIORITY_DEFAULT):
+    def __init__(self, ctx, f, data=None, lt=_false_lt):
         self._ctx = ctx
         # `f` should behave as if a generator.
         self._g = iter(f(self))
         self.data = data
-        self.priority = priority
+        self.lt = lt
 
         self.value = None
         self.error = None
@@ -640,7 +644,7 @@ class _Task:
         return f"{self.__class__.__name__} {self.data}"
 
     def __lt__(self, other):
-        return self.priority < other.priority
+        return self.lt(self, other)
 
     def __next__(self):
         if self.done.is_set():
@@ -914,6 +918,7 @@ def _de_with_meta(metadata, x):
             return {k: impl(v) for k, v in x.items()}
         else:
             return x
+
     return impl(x)
 
 
@@ -956,6 +961,10 @@ def _cdotify(xs):
     if xs and len(xs) > 4:
         xs = xs[:3] + [_CDOTS]
     return xs
+
+
+def _task_lt(s, o):
+    return s.data < o.data
 
 
 def _do_nothing(*_):
