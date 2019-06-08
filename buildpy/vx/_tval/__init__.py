@@ -19,7 +19,6 @@ class TVal:
 
 
 class TDict:
-
     def __init__(self, *args, **kwargs):
         self.data = dict(*args, **kwargs)
         self.lock = threading.RLock()
@@ -70,14 +69,12 @@ class TDict:
 
 
 class TDefaultDict(TDict):
-
     def __init__(self, *args, **kwargs):
         super().__init__()
         self.data = collections.defaultdict(dict)
 
 
 class Cache:
-
     def __init__(self):
         self._data_lock_dict = dict()
         self._data_lock_dict_lock = threading.Lock()
@@ -95,7 +92,7 @@ class Cache:
         with k_lock:
             try:
                 return self._data[k]
-            except KeyError: # This block may require time to finish.
+            except KeyError:  # This block may require time to finish.
                 val = make_val()
                 self._data[k] = val
                 return val
@@ -138,100 +135,7 @@ class TInt(TVal):
             self._val -= 1
 
 
-class ddict:
-    """
-    >>> conf = ddict()
-    >>> conf.z = 99
-    >>> conf
-    ddict({'z': 99})
-    >>> conf = ddict(a=1, b=ddict(c=2, d=ddict(e=3)))
-    >>> conf
-    ddict({'a': 1, 'b': ddict({'c': 2, 'd': ddict({'e': 3})})})
-    >>> conf.a
-    1
-    >>> conf.b.c
-    2
-    >>> conf.a = 99
-    >>> conf.b.c = 88
-    >>> conf
-    ddict({'a': 99, 'b': ddict({'c': 88, 'd': ddict({'e': 3})})})
-    >>> conf.a = 1
-    >>> conf.b.c = 2
-    >>> conf._update(dict(p=9, r=10))
-    ddict({'a': 1, 'b': ddict({'c': 2, 'd': ddict({'e': 3})}), 'p': 9, 'r': 10})
-    >>> conf._to_dict_rec()
-    {'a': 1, 'b': {'c': 2, 'd': {'e': 3}}, 'p': 9, 'r': 10}
-    >>> conf._of_dict_rec({'a': 1, 'b': {'c': 2, 'd': {'e': 3}}})
-    ddict({'a': 1, 'b': ddict({'c': 2, 'd': ddict({'e': 3})})})
-    >>> conf._to_dict()
-    {'a': 1, 'b': ddict({'c': 2, 'd': ddict({'e': 3})})}
-    >>> conf._of_dict({'a': 1, 'b': {'c': 2, 'd': {'e': 3}}, 'p': 9, 'r': 10})
-    ddict({'a': 1, 'b': {'c': 2, 'd': {'e': 3}}, 'p': 9, 'r': 10})
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__setattr__("_lock", threading.RLock())
-        super().__setattr__("_data", dict())
-        self._update(dict(*args, **kwargs))
-
-    def __setattr__(self, k, v):
-        with self._lock:
-            self[k] = v
-
-    def __getattr__(self, k):
-        with self._lock:
-            return self[k]
-
-    def __setitem__(self, k, v):
-        with self._lock:
-            if k in self.__dict__:
-                raise ValueError(f"Tried to overwrite {k} of {self} by {v}")
-            self._data[k] = v
-
-    def __getitem__(self, k):
-        with self._lock:
-            return self._data[k]
-
-    def __contains__(self, k):
-        with self._lock:
-            return k in self._data
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}({repr(self._data)})"
-
-    def _values(self):
-        with self._lock:
-            return self._data.values()
-
-    def _update(self, d):
-        with self._lock:
-            for k, v in d.items():
-                setattr(self, k, v)
-            return self
-
-    def _to_dict(self):
-        with self._lock:
-            return self._data.copy()
-
-    def _to_dict_rec(self):
-        with self._lock:
-            return {k: v._to_dict_rec() if isinstance(v, self.__class__) else v for k, v in self._data.items()}
-
-    def _of_dict(self, d):
-        with self._lock:
-            self._data.clear()
-            return self._update(d)
-
-    def _of_dict_rec(self, d):
-        with self._lock:
-            self._data.clear()
-            for k, v in d.items():
-                setattr(self, k, self.__class__()._of_dict_rec(v) if isinstance(v, dict) else v)
-            return self
-
-
 class NonOverwritableDict(TDict):
-
     def __setitem__(self, k, v):
         with self.lock:
             if k in self.data:

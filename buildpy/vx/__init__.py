@@ -270,13 +270,7 @@ class _Job:
             self.dsl.job_of_target[t] = self
 
         # User data.
-        if data is None:
-            # Store None instead of an empty dict to reduce memory consumption.
-            self.data = data
-            self._data = data
-        else:
-            self.data = _tval.ddict(data)
-            self._data = data
+        self.data = data
         dsl.execution_logger_defined.queue.put(self.to_execution_log_data())
 
     def __repr__(self):
@@ -359,7 +353,7 @@ class _Job:
 
     def to_execution_log_data(self):
         return dict(
-            data=self._data,
+            data=self.data,
             desc=self.desc,
             ds=self.ds,
             priority=self.priority,
