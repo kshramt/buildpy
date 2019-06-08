@@ -46,6 +46,13 @@ setup(
         "buildpy.v7.exception",
         "buildpy.v7.resource",
 
+        "buildpy.v8",
+        "buildpy.v8._convenience",
+        "buildpy.v8._log",
+        "buildpy.v8._tval",
+        "buildpy.v8.exception",
+        "buildpy.v8.resource",
+
         "buildpy.vx",
         "buildpy.vx._convenience",
         "buildpy.vx._log",
