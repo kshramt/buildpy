@@ -1,5 +1,6 @@
 import _thread
 import argparse
+import asyncio
 import datetime
 import functools
 import itertools
@@ -68,8 +69,7 @@ class DSL:
         self._terminate_subprocesses = terminate_subprocesses
         self.time_of_dep_cache = _tval.Cache()
         self.metadata = _tval.TDefaultDict()
-
-        self.task_context = _TaskContext()
+        self.event_loop = _event_loop_of()
 
         self.thread_pool = _ThreadPool(
             self.job_of_target,
@@ -214,7 +214,8 @@ class DSL:
         return _dependencies_dot_of(self.jobs)
 
     def _cleanup(self):
-        self.task_context.stop = True
+        self.event_loop.call_soon_threadsafe(self.event_loop.stop)
+        self.event_loop.call_soon_threadsafe(self.event_loop.close)
         self.thread_pool.stop = True
         if self._terminate_subprocesses:
             _terminate_subprocesses()
@@ -265,6 +266,7 @@ class _Job:
         self.dsl = dsl
 
         self.task = None
+        self.task_done_event = asyncio.Event()
 
         for t in self.ts_unique:
             self.dsl.job_of_target[t] = self
@@ -331,13 +333,10 @@ class _Job:
 
                         child = self.dsl.job_of_target[d]
                     children.append(child.invoke(cc))
-                self.task = _Task(
-                    self.dsl.task_context,
-                    functools.partial(_task_of_invoke, self, children),
-                    data=self,
-                    lt=_task_lt,
+
+                self.task = self.dsl.event_loop.call_soon_threadsafe(
+                    self.dsl.event_loop.create_task, _task_of_invoke(self, children)
                 )
-                self.task.put()
         return self
 
     def wait(self):
@@ -345,7 +344,7 @@ class _Job:
         while not self.done.wait(timeout=1):
             pass
 
-    def _enq(self):
+    def enq(self):
         logger.debug(self)
         self.dsl.thread_pool.push_job(self)
         self.dsl.execution_logger_enqueued.queue.put(self.to_execution_log_data())
@@ -556,7 +555,7 @@ class _ThreadPool:
                         j.successed = True
                 j.done.set()
                 j.dsl.execution_logger_done.queue.put(j.to_execution_log_data())
-                j.task.put()
+                j.dsl.event_loop.call_soon_threadsafe(j.task_done_event.set)
                 if j.serial:
                     self._serial_queue_lock.release()
             with self._threads_loc:
@@ -580,112 +579,6 @@ class _ThreadPool:
             except Exception:
                 pass
         _thread.interrupt_main()
-
-
-class _TaskContext:
-    # It might be difficult to use asyncio with threading.
-
-    def __init__(self):
-        self.stop = False
-
-        self.queue = queue.PriorityQueue()
-        self._th = threading.Thread(target=self._loop, daemon=True)
-        self._th.start()
-
-    def task(self, f):
-        t = _Task(self, f)
-        t.put()
-        return t
-
-    def _loop(self):
-        # print("vvvv", file=sys.stderr)
-        # for t in self.queue.queue.copy():
-        #     print("\t", t, file=sys.stderr)
-        # print("^^^^", file=sys.stderr)
-        while not self.stop:
-            # print("vvvv", file=sys.stderr)
-            # for t in self.queue.queue.copy():
-            #     print("\t", t, file=sys.stderr)
-            # print("^^^^", file=sys.stderr)
-            task = self.queue.get(block=True)
-            try:
-                if next(task):
-                    pass
-                else:
-                    task.put()
-            except StopIteration:
-                pass
-
-
-def _false_lt(s, o):
-    return False
-
-
-class _Task:
-    def __init__(self, ctx, f, data=None, lt=_false_lt):
-        self._ctx = ctx
-        # `f` should behave as if a generator.
-        self._g = iter(f(self))
-        self.data = data
-        self.lt = lt
-
-        self.value = None
-        self.error = None
-        self.waited = queue.Queue()
-        self.done = threading.Event()
-
-    def __repr__(self):
-        return f"{self.__class__.__name__} {self.data}"
-
-    def __lt__(self, other):
-        return self.lt(self, other)
-
-    def __next__(self):
-        if self.done.is_set():
-            raise StopIteration
-        try:
-            return next(self._g)
-        except StopIteration as e:
-            self.value = e.value
-            self.done.set()
-            self._put_waited()
-            raise
-        except Exception as e:
-            self.error = e
-            self.done.set()
-            raise
-
-    def __iter__(self):
-        return self
-
-    def wait(self, child=None):
-        """
-        def f(self):
-            child = ...
-            yield self.wait(child)
-
-        f.wait()
-        """
-        if child is None:
-            self.done.wait()
-            return self
-        else:
-            # I do not need a lock here since the `yield self.wait(child)` pattern does not occur in another thread.
-            if child.done.is_set():
-                return False
-            child.waited.put(self)
-            return self
-
-    def put(self):
-        self._ctx.queue.put(self)
-
-    def _put_waited(self):
-        assert self.done.is_set(), self
-        while True:
-            try:
-                self.waited.get(block=False).put()
-            except queue.Empty:
-                break
 
 
 class _WithMeta:
@@ -853,13 +746,12 @@ def _node_of(name, node_of_name, i):
     return node, i
 
 
-def _task_of_invoke(j, children, this):
+async def _task_of_invoke(j, children):
     for child in children:
-        yield this.wait(child.task)
-    if all(child.successed for child in children):
-        # j.task.put() is called inside _worker()
-        # todo: _Task, _Job, and _ThreadPool should be decoupled.
-        yield j._enq()
+        await child.task_done_event.wait()
+    if all(child.done.is_set() for child in children):
+        j.enq()
+        await j.task_done_event.wait()
         assert j.done.is_set(), j
     else:
         j.done.set()
@@ -899,6 +791,13 @@ def _with_meta(x, **kwargs):
         return _WithMeta(x.val, {**x.meta, **kwargs})
     else:
         return _WithMeta(x, **kwargs)
+
+
+def _event_loop_of():
+    loop = asyncio.get_event_loop()
+    th = threading.Thread(target=lambda: loop.run_forever(), daemon=True)
+    th.start()
+    return loop
 
 
 def _de_with_meta(metadata, x):
@@ -955,10 +854,6 @@ def _cdotify(xs):
     if xs and len(xs) > 4:
         xs = xs[:3] + [_CDOTS]
     return xs
-
-
-def _task_lt(s, o):
-    return s.data < o.data
 
 
 def _do_nothing(*_):
