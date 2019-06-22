@@ -1,19 +1,18 @@
 import _thread
 import argparse
 import asyncio
+import concurrent.futures
 import datetime
 import functools
 import itertools
 import io
 import json
 import logging
-import math
 import os
 import queue
 import shutil
 import sys
 import threading
-import time
 import traceback
 import uuid
 
@@ -70,15 +69,10 @@ class DSL:
         self.time_of_dep_cache = _tval.Cache()
         self.metadata = _tval.TDefaultDict()
         self.event_loop = _event_loop_of()
-
-        self.thread_pool = _ThreadPool(
-            self.job_of_target,
-            self.args.keep_going,
-            self.args.jobs,
-            self.args.n_serial,
-            self.args.load_average,
-            die_hooks=[self._cleanup],
-        )
+        self.executor = concurrent.futures.ThreadPoolExecutor(self.args.jobs)
+        self.deferred_errors = queue.Queue()
+        self.got_error = False
+        self._cleanuped = False
 
         self.execution_log_dir = (
             None
@@ -94,6 +88,8 @@ class DSL:
                         executable=sys.executable,
                         id_dsl=self.id_dsl,
                         version=sys.version,
+                        __name__=__name__,
+                        __version__=__version__,
                     ),
                     fp,
                     ensure_ascii=False,
@@ -135,7 +131,7 @@ class DSL:
         """
 
         if cut:
-            return
+            return None
 
         j = _FileJob(
             None,
@@ -155,7 +151,7 @@ class DSL:
         self, target, deps, desc=None, priority=_PRIORITY_DEFAULT, data=None, cut=False
     ):
         if cut:
-            return
+            return None
 
         j = _PhonyJob(_do_nothing, [target], deps, desc, priority, dsl=self, data=data)
         self.jobs.add(j)
@@ -173,17 +169,16 @@ class DSL:
         else:
             try:
                 for target in self.args.targets:
-                    logger.debug(target)
                     self.job_of_target[target].invoke()
                 for target in self.args.targets:
                     self.job_of_target[target].wait()
             except KeyboardInterrupt as e:
                 self._cleanup()
                 raise
-            if self.thread_pool.deferred_errors.qsize() > 0:
+            if self.deferred_errors.qsize() > 0:
                 logger.error("Following errors have thrown during the execution")
-                for _ in range(self.thread_pool.deferred_errors.qsize()):
-                    j, e_str = self.thread_pool.deferred_errors.get()
+                for _ in range(self.deferred_errors.qsize()):
+                    j, e_str = self.deferred_errors.get()
                     logger.error(e_str)
                     logger.error(j)
                 raise exception.Err("Execution failed.")
@@ -214,11 +209,19 @@ class DSL:
         return _dependencies_dot_of(self.jobs)
 
     def _cleanup(self):
+        if self._cleanuped:
+            return
+        self._cleanuped = True
+        self.executor.shutdown(wait=False)
         self.event_loop.call_soon_threadsafe(self.event_loop.stop)
         self.event_loop.call_soon_threadsafe(self.event_loop.close)
-        self.thread_pool.stop = True
         if self._terminate_subprocesses:
             _terminate_subprocesses()
+
+    def _die(self, e):
+        logger.critical(e)
+        self._cleanup()
+        _thread.interrupt_main()
 
 
 # Internal use only.
@@ -249,9 +252,9 @@ class _ExecutionLogger:
 
 class _Job:
     def __init__(self, f, ts, ds, desc, priority, dsl, data):
-        self.lock = threading.RLock()
         self.done = threading.Event()
-        self.executed = False
+        self.adone = asyncio.Event()
+        self.executed = False  # This flag is used to propagate dry-run.
         self.successed = False  # True if self.execute did not raise an error
         self.serial = False
         self.metadata = _tval.TDefaultDict()
@@ -265,8 +268,8 @@ class _Job:
         self.priority = priority
         self.dsl = dsl
 
-        self.task = None
-        self.task_done_event = asyncio.Event()
+        self.invoked = False
+        self.run_future = None
 
         for t in self.ts_unique:
             self.dsl.job_of_target[t] = self
@@ -276,7 +279,7 @@ class _Job:
         dsl.execution_logger_defined.queue.put(self.to_execution_log_data())
 
     def __repr__(self):
-        return f"{type(self).__name__}({_cdotify(self.ts_unique)}, {_cdotify(self.ds_unique)})"
+        return f"{type(self).__name__}({_cdotify(self.ts)}, {_cdotify(self.ds)})"
 
     def __call__(self, f):
         self.f = f
@@ -288,6 +291,7 @@ class _Job:
     def execute(self):
         logger.debug(self)
         assert not self.done.is_set(), self
+        assert not self.adone.is_set(), self
         if self.dsl.args.dry_run:
             self.write()
         else:
@@ -308,47 +312,17 @@ class _Job:
             print("\t", d, sep="", file=file)
         print(file=file)
 
-    def invoke(self, call_chain=()):
-        logger.debug(self)
-
-        if _contains(self, call_chain):
-            raise exception.Err(
-                f"A circular dependency detected: {self} for {call_chain}"
-            )
-        with self.lock:
-            if self.task is None:
-                self.dsl.execution_logger_invoked.queue.put(
-                    self.to_execution_log_data()
-                )
-                cc = (self, call_chain)
-                children = []
-                for d in self.ds_unique:
-                    try:
-                        child = self.dsl.job_of_target[d]
-                    except KeyError:
-
-                        @self.dsl.file([self.dsl.meta(d, keep=True)], [])
-                        def _(j):
-                            raise exception.Err(f"No rule to make {d}")
-
-                        child = self.dsl.job_of_target[d]
-                    children.append(child.invoke(cc))
-
-                self.task = self.dsl.event_loop.call_soon_threadsafe(
-                    self.dsl.event_loop.create_task, _task_of_invoke(self, children)
-                )
+    def invoke(self):
+        self.dsl.event_loop.call_soon_threadsafe(
+            self.dsl.event_loop.create_task, self._invoke(())
+        )
         return self
 
     def wait(self):
+        # We can just wait a threading.Event since `wait` is called only in the main thread or an executor, and no event loop will be block by the call.
         logger.debug(self)
         while not self.done.wait(timeout=1):
             pass
-
-    def enq(self):
-        logger.debug(self)
-        self.dsl.thread_pool.push_job(self)
-        self.dsl.execution_logger_enqueued.queue.put(self.to_execution_log_data())
-        return self
 
     def to_execution_log_data(self):
         return dict(
@@ -360,6 +334,85 @@ class _Job:
             successed=self.successed,
             ts=self.ts,
         )
+
+    async def _invoke(self, call_chain):
+        # This coroutine runs inside self.dsl.event_loop.
+        logger.debug(self)
+        if not self.invoked:
+            self.invoked = True
+            self.dsl.execution_logger_invoked.queue.put(self.to_execution_log_data())
+            if _contains(self, call_chain):
+                raise exception.Err(
+                    f"A circular dependency detected: {self} for {call_chain}"
+                )
+            cc = (self, call_chain)
+            children = []
+            for d in self.ds_unique:
+                try:
+                    child = self.dsl.job_of_target[d]
+                except KeyError:
+
+                    @self.dsl.file([self.dsl.meta(d, keep=True)], [])
+                    def _(j):
+                        raise exception.Err(f"No rule to make {d}")
+
+                    child = self.dsl.job_of_target[d]
+                self.dsl.event_loop.create_task(child._invoke(cc))
+                children.append(child)
+            for child in children:
+                await child.adone.wait()
+            if all(child.successed for child in children):
+                self.dsl.event_loop.run_in_executor(self.dsl.executor, self._run)
+                self.dsl.execution_logger_enqueued.queue.put(
+                    self.to_execution_log_data()
+                )
+            else:
+                # todo: Move the done calls into j._enq() or a function therein.
+                # Order matters.
+                self.done.set()
+                self.adone.set()
+
+    def _run(self):
+        if self.dsl.got_error:
+            logger.debug("Early return by an error %s", self)
+            return
+        try:
+            logger.debug("working on %s", self)
+            try:
+                need_update = self.need_update()
+            except:
+                need_update = None
+                self._post_exception()
+            if need_update:
+                try:
+                    self.execute()
+                    self.executed = True
+                    self.successed = True
+                except Exception as e:
+                    self._post_exception()
+            else:
+                self.executed = False
+                if need_update is None:
+                    self.successed = False
+                else:
+                    self.successed = True
+            self.done.set()
+            self.dsl.event_loop.call_soon_threadsafe(self.adone.set)
+            self.dsl.execution_logger_done.queue.put(self.to_execution_log_data())
+        except Exception as e:  # Propagate Exception caused by a bug in buildpy code to the main thread.
+            e_str = _str_of_exception()
+            self.dsl._die(e_str)
+
+    def _post_exception(self):
+        logger.error(self)
+        e_str = _str_of_exception()
+        self.rm_targets()
+        if self.dsl.args.keep_going:
+            logger.error(e_str)
+            self.dsl.deferred_errors.put((self, e_str))
+        else:
+            self.dsl.got_error = True
+            self.dsl._die(e_str)
 
 
 class _PhonyJob(_Job):
@@ -378,7 +431,7 @@ class _FileJob(_Job):
         self.serial = serial
 
     def __repr__(self):
-        return f"{type(self).__name__}({_cdotify(self.ts_unique)}, {_cdotify(self.ds_unique)}, serial={self.serial})"
+        return f"{type(self).__name__}({_cdotify(self.ts)}, {_cdotify(self.ds)}, serial={self.serial})"
 
     def rm_targets(self):
         logger.info(f"rm_targets(%s)", self.ts)
@@ -443,142 +496,6 @@ class _FileJob(_Job):
     def _credential_of(self, uri):
         meta = self.dsl.metadata[uri]
         return meta["credential"] if "credential" in meta else None
-
-
-class _ThreadPool:
-    # It is not straightforward to support the `serial` argument by concurrent.future.
-
-    def __init__(
-        self, job_of_target, keep_going, n_max, n_serial_max, load_average, die_hooks
-    ):
-        assert n_max > 0
-        assert n_serial_max > 0
-        self.deferred_errors = queue.Queue()
-        self.job_of_target = job_of_target
-        self._keep_going = keep_going
-        self._n_max = n_max
-        self._load_average = load_average
-        self._die_hooks = die_hooks
-        self._threads = _tval.TSet()
-        self._unwaited_threads = _tval.TSet()
-        self._threads_loc = threading.RLock()
-        self._queue = queue.PriorityQueue()
-        self._serial_queue = queue.PriorityQueue()
-        self._serial_queue_lock = threading.Semaphore(n_serial_max)
-        self._n_running = _tval.TInt(0)
-        self.stop = False
-
-    def push_job(self, j):
-        if self.stop:
-            return
-        self._enq_job(j)
-        with self._threads_loc:
-            if len(self._threads) < 1 or (
-                len(self._threads) < self._n_max
-                and os.getloadavg()[0] <= self._load_average
-            ):
-                t = threading.Thread(target=self._worker, daemon=True)
-                self._threads.add(t)
-                t.start()
-                # A thread should be `start`ed before `join`ed
-                self._unwaited_threads.add(t)
-
-    def _enq_job(self, j):
-        if j.serial:
-            self._serial_queue.put(j)
-        else:
-            self._queue.put(j)
-
-    def wait(self):
-        while True:
-            try:
-                t = self._unwaited_threads.pop()
-            except KeyError:
-                break
-            t.join()
-
-    def _worker(self):
-        try:
-            while True:
-                if self.stop:
-                    break
-                j = None
-                if self._serial_queue_lock.acquire(blocking=False):
-                    try:
-                        j = self._serial_queue.get(block=False)
-                        assert j.serial
-                    except queue.Empty:
-                        self._serial_queue_lock.release()
-                if j is None:
-                    try:
-                        j = self._queue.get(block=True, timeout=0.01)
-                    except queue.Empty:
-                        break
-                logger.debug("working on %s", j)
-
-                def _post_exception():
-                    logger.error(j)
-                    e_str = _str_of_exception()
-                    logger.error(e_str)
-                    j.rm_targets()
-                    if self._keep_going:
-                        self.deferred_errors.put((j, e_str))
-                    else:
-                        self._die(e_str)
-
-                try:
-                    need_update = j.need_update()
-                except:
-                    need_update = None
-                    _post_exception()
-                if need_update:
-                    assert self._n_running.val() >= 0
-                    if math.isfinite(self._load_average):
-                        while (
-                            self._n_running.val() > 0
-                            and os.getloadavg()[0] > self._load_average
-                        ):
-                            time.sleep(1)
-                    self._n_running.inc()
-                    try:
-                        j.execute()
-                        j.executed = True
-                        j.successed = True
-                    except Exception as e:
-                        _post_exception()
-                    self._n_running.dec()
-                else:
-                    j.executed = False
-                    if need_update is None:
-                        j.successed = False
-                    else:
-                        j.successed = True
-                j.done.set()
-                j.dsl.execution_logger_done.queue.put(j.to_execution_log_data())
-                j.dsl.event_loop.call_soon_threadsafe(j.task_done_event.set)
-                if j.serial:
-                    self._serial_queue_lock.release()
-            with self._threads_loc:
-                try:
-                    self._threads.remove(threading.current_thread())
-                except KeyError:
-                    pass
-                try:
-                    self._unwaited_threads.remove(threading.current_thread())
-                except KeyError:
-                    pass
-        except Exception as e:  # Propagate Exception caused by a bug in buildpy code to the main thread.
-            e_str = _str_of_exception()
-            self._die(e_str)
-
-    def _die(self, e):
-        logger.critical(e)
-        for h in self._die_hooks:
-            try:
-                h()
-            except Exception:
-                pass
-        _thread.interrupt_main()
 
 
 class _WithMeta:
@@ -744,17 +661,6 @@ def _node_of(name, node_of_name, i):
         node = "n" + str(i)
         node_of_name[name] = node
     return node, i
-
-
-async def _task_of_invoke(j, children):
-    for child in children:
-        await child.task_done_event.wait()
-    if all(child.done.is_set() for child in children):
-        j.enq()
-        await j.task_done_event.wait()
-        assert j.done.is_set(), j
-    else:
-        j.done.set()
 
 
 def _escape(s):
