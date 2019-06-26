@@ -11,10 +11,6 @@ export IFS=$' \t\n'
 export LANG=en_US.UTF-8
 umask u=rwx,g=,o=
 
-echo pending "$0" > /dev/stderr
-exit
-
-
 readonly tmp_dir="$(mktemp -d)"
 
 finalize(){

@@ -8,11 +8,13 @@ import itertools
 import io
 import json
 import logging
+import math
 import os
 import queue
 import shutil
 import sys
 import threading
+import time
 import traceback
 import uuid
 
@@ -69,7 +71,11 @@ class DSL:
         self.time_of_dep_cache = _tval.Cache()
         self.metadata = _tval.TDefaultDict()
         self.event_loop = _event_loop_of()
-        self.executor = concurrent.futures.ThreadPoolExecutor(self.args.jobs)
+        self.executor = _ThreadPoolExecutor(
+            n_max=self.args.jobs,
+            n_serial_max=self.args.n_serial,
+            load_average=self.args.load_average,
+        )
         self.deferred_errors = queue.Queue()
         self.got_error = False
         self._cleanuped = False
@@ -214,7 +220,7 @@ class DSL:
         self._cleanuped = True
         self.executor.shutdown(wait=False)
         self.event_loop.call_soon_threadsafe(self.event_loop.stop)
-        self.event_loop.call_soon_threadsafe(self.event_loop.close)
+        # self.event_loop.call_soon_threadsafe(self.event_loop.close)
         if self._terminate_subprocesses:
             _terminate_subprocesses()
 
@@ -362,7 +368,9 @@ class _Job:
             for child in children:
                 await child.adone.wait()
             if all(child.successed for child in children):
-                self.dsl.event_loop.run_in_executor(self.dsl.executor, self._run)
+                self.dsl.event_loop.run_in_executor(
+                    self.dsl.executor, self._to_work_item()
+                )
                 self.dsl.execution_logger_enqueued.queue.put(
                     self.to_execution_log_data()
                 )
@@ -372,38 +380,10 @@ class _Job:
                 self.done.set()
                 self.adone.set()
 
-    def _run(self):
-        if self.dsl.got_error:
-            logger.debug("Early return by an error %s", self)
-            return
-        try:
-            logger.debug("working on %s", self)
-            try:
-                need_update = self.need_update()
-            except:
-                need_update = None
-                self._post_exception()
-            if need_update:
-                try:
-                    self.execute()
-                    self.executed = True
-                    self.successed = True
-                except Exception as e:
-                    self._post_exception()
-            else:
-                self.executed = False
-                if need_update is None:
-                    self.successed = False
-                else:
-                    self.successed = True
-            self.done.set()
-            self.dsl.event_loop.call_soon_threadsafe(self.adone.set)
-            self.dsl.execution_logger_done.queue.put(self.to_execution_log_data())
-        except Exception as e:  # Propagate Exception caused by a bug in buildpy code to the main thread.
-            e_str = _str_of_exception()
-            self.dsl._die(e_str)
+    def _to_work_item(self):
+        return _WorkItem(self)
 
-    def _post_exception(self):
+    def post_exception(self):
         logger.error(self)
         e_str = _str_of_exception()
         self.rm_targets()
@@ -496,6 +476,136 @@ class _FileJob(_Job):
     def _credential_of(self, uri):
         meta = self.dsl.metadata[uri]
         return meta["credential"] if "credential" in meta else None
+
+
+class _WorkItem:
+    def __init__(self, j):
+        self.j = j
+        self.future = concurrent.futures.Future()
+        self.serial = j.serial
+        self.priority = j.priority
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.j})"
+
+    def __call__(self):
+        if not self.future.set_running_or_notify_cancel():
+            return
+        try:
+            result = self._run()
+        except Exception as e:
+            self.future.set_exception(e)
+        else:
+            self.future.set_result(result)
+
+    def _run(self):
+        if self.j.dsl.got_error:
+            logger.debug("Early return by an error %s", self.j)
+            return
+        try:
+            logger.debug("Running %s", self.j)
+            try:
+                need_update = self.j.need_update()
+            except Exception:
+                need_update = None
+                self.j.post_exception()
+            if need_update:
+                try:
+                    self.j.execute()
+                    self.j.executed = True
+                    self.j.successed = True
+                except Exception:
+                    self.j.post_exception()
+            else:
+                self.j.executed = False
+                if need_update is None:
+                    self.j.successed = False
+                else:
+                    self.j.successed = True
+            self.j.done.set()
+            self.j.dsl.event_loop.call_soon_threadsafe(self.j.adone.set)
+            self.j.dsl.execution_logger_done.queue.put(self.j.to_execution_log_data())
+        except Exception:  # Propagate Exception caused by a bug in buildpy code to the main thread.
+            e_str = _str_of_exception()
+            self.j.dsl._die(e_str)
+
+    def __lt__(self, other):
+        return self.j < other.j
+
+
+class _ThreadPoolExecutor:
+    def __init__(self, n_max, n_serial_max, load_average):
+        if n_max < 1:
+            raise ValueError(f"n_max = {n_max} should be greater than 0")
+        if n_serial_max < 1:
+            raise ValueError(f"n_serial_max = {n_serial_max} should be greater than 0")
+        self._n_max = n_max
+        self._load_average = load_average
+        self._threads = set()
+        self._threads_lock = threading.Lock()
+        self._queue = queue.PriorityQueue()
+        self._serial_queue = queue.PriorityQueue()
+        self._serial_queue_lock = threading.Semaphore(n_serial_max)
+        self._n_running = _tval.TInt(0)
+        self._shutdown = False
+
+    def submit(self, wi: _WorkItem):
+        logger.debug(wi)
+        if self._shutdown:
+            return
+        if wi.serial:
+            self._serial_queue.put(wi)
+        else:
+            self._queue.put(wi)
+        with self._threads_lock:
+            if len(self._threads) < 1 or (
+                len(self._threads) <= self._n_max
+                and os.getloadavg()[0] <= self._load_average
+            ):
+                t = threading.Thread(target=self._worker, daemon=True)
+                self._threads.add(t)
+                t.start()
+        return wi.future
+
+    def shutdown(self, wait=True):
+        self._shutdown = True
+
+    def _worker(self):
+        logger.debug("Start a new worker")
+        # No protection against BuildPy's internal error.
+        while True:
+            if self._shutdown:
+                break
+            wi = None
+            logger.debug("Try to get a work item")
+            if self._serial_queue_lock.acquire(blocking=False):
+                try:
+                    wi = self._serial_queue.get(block=False)
+                    assert wi.serial
+                except queue.Empty:
+                    self._serial_queue_lock.release()
+            if wi is None:
+                try:
+                    wi = self._queue.get(block=True, timeout=0.01)
+                except queue.Empty:
+                    break
+            logger.debug("Working on %s", wi)
+
+            if math.isfinite(self._load_average):
+                while (
+                    self._n_running.val() > 0
+                    and os.getloadavg()[0] > self._load_average
+                ):
+                    time.sleep(1)
+            self._n_running.inc()
+            wi()
+            self._n_running.dec()
+            if wi.serial:
+                self._serial_queue_lock.release()
+        # todo: Do not discard idle threads immediately.
+        logger.debug("Stopping a worker")
+        with self._threads_lock:
+            self._threads.remove(threading.current_thread())
 
 
 class _WithMeta:
@@ -694,7 +804,7 @@ def _terminate_subprocesses():
 
 def _with_meta(x, **kwargs):
     if isinstance(x, _WithMeta):
-        return _WithMeta(x.val, {**x.meta, **kwargs})
+        return _WithMeta(x.val, **{**x.meta, **kwargs})
     else:
         return _WithMeta(x, **kwargs)
 
