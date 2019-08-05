@@ -811,7 +811,7 @@ def _with_meta(x, **kwargs):
 
 def _event_loop_of():
     loop = asyncio.get_event_loop()
-    th = threading.Thread(target=lambda: loop.run_forever(), daemon=True)
+    th = threading.Thread(target=loop.run_forever, daemon=True)
     th.start()
     return loop
 
