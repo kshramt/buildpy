@@ -221,7 +221,7 @@ class DSL:
         if self._terminate_subprocesses:
             _terminate_subprocesses()
 
-    def _die(self, e):
+    def die(self, e: str):
         logger.critical(e)
         self._cleanup()
         _thread.interrupt_main()
@@ -389,7 +389,7 @@ class _Job:
             self.dsl.deferred_errors.put((self, e_str))
         else:
             self.dsl.got_error = True
-            self.dsl._die(e_str)
+            self.dsl.die(e_str)
 
 
 class _PhonyJob(_Job):
@@ -524,7 +524,7 @@ class _WorkItem:
             self.j.dsl.execution_logger_done.queue.put(self.j.to_execution_log_data())
         except Exception:  # Propagate Exception caused by a bug in buildpy code to the main thread.
             e_str = _str_of_exception()
-            self.j.dsl._die(e_str)
+            self.j.dsl.die(e_str)
 
     def __lt__(self, other):
         return self.j < other.j
