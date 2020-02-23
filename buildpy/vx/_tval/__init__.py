@@ -98,30 +98,6 @@ class Cache:
                 return val
 
 
-class TSet(TVal):
-    def __init__(self):
-        super().__init__(set())
-
-    def __len__(self):
-        with self._lock:
-            return len(self._val)
-
-    def __iter__(self):
-        return iter(self.val())
-
-    def add(self, x):
-        with self._lock:
-            self._val.add(x)
-
-    def remove(self, x):
-        with self._lock:
-            self._val.remove(x)
-
-    def pop(self):
-        with self._lock:
-            return self._val.pop()
-
-
 class TInt(TVal):
     def __init__(self, val):
         super().__init__(val)

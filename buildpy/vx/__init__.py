@@ -65,7 +65,6 @@ class DSL:
 
         logger.setLevel(getattr(logging, self.args.log))
         self.job_of_target = _tval.NonOverwritableDict()
-        self.jobs = _tval.TSet()
         self._use_hash = use_hash
         self._terminate_subprocesses = terminate_subprocesses
         self.time_of_dep_cache = _tval.Cache()
@@ -150,7 +149,6 @@ class DSL:
             dsl=self,
             data=data,
         )
-        self.jobs.add(j)
         return j
 
     def phony(
@@ -160,14 +158,13 @@ class DSL:
             return None
 
         j = _PhonyJob(_do_nothing, [target], deps, desc, priority, dsl=self, data=data)
-        self.jobs.add(j)
         return j
 
     def run(self):
         if self.args.descriptions:
-            _print_descriptions(self.jobs)
+            _print_descriptions(set(self.job_of_target.values()))
         elif self.args.dependencies:
-            _print_dependencies(self.jobs)
+            _print_dependencies(set(self.job_of_target.values()))
         elif self.args.dependencies_dot:
             print(self.dependencies_dot())
         elif self.args.dependencies_json:
@@ -209,10 +206,10 @@ class DSL:
             raise NotImplementedError(f"rm({repr(uri)}) is not supported")
 
     def dependencies_json(self):
-        return _dependencies_json_of(self.jobs)
+        return _dependencies_json_of(set(self.job_of_target.values()))
 
     def dependencies_dot(self):
-        return _dependencies_dot_of(self.jobs)
+        return _dependencies_dot_of(set(self.job_of_target.values()))
 
     def _cleanup(self):
         if self._cleanuped:

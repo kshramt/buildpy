@@ -34,14 +34,6 @@ def main(argv):
 
     @buildpy.vx.DSL.let
     def _():
-        s = buildpy.vx._tval.TSet()
-        s.add(s.add(s.add(1)))
-        assert len(s) == 2
-        s.remove(s.remove(1))
-        assert len(s) == 0
-
-    @buildpy.vx.DSL.let
-    def _():
         s = buildpy.vx.DSL.serialize(None)
         assert s == "n", s
         s = buildpy.vx.DSL.serialize(1)
