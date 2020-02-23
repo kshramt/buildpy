@@ -16,6 +16,7 @@ import sys
 import threading
 import time
 import traceback
+import typing
 import uuid
 
 import psutil
@@ -28,8 +29,10 @@ from . import resource
 
 
 __version__ = "7.1.0"
-
-
+T1 = typing.TypeVar("T1")
+T2 = typing.TypeVar("T2")
+TK = typing.TypeVar("TK")
+TV = typing.TypeVar("TV")
 _PRIORITY_DEFAULT = 0
 
 
@@ -770,7 +773,7 @@ def _node_of(name, node_of_name, i):
     return node, i
 
 
-def _escape(s):
+def _escape(s: str):
     return '"' + "".join('\\"' if x == '"' else x for x in s) + '"'
 
 
@@ -845,7 +848,7 @@ def _unique_of(xs):
     return sorted(ret)
 
 
-def _coalesce(x, default):
+def _coalesce(x: typing.Optional[T1], default: T1):
     return default if x is None else x
 
 
@@ -856,7 +859,7 @@ def _contains(v, c):
         return False
 
 
-def _set_unique(d, k, v):
+def _set_unique(d: typing.MutableMapping[TK, TV], k: TK, v: TV):
     if k in d:
         raise exception.Err(f"{repr(k)} in {repr(d)}")
     d[k] = v
