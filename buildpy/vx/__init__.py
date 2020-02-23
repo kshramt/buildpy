@@ -1,6 +1,7 @@
 import _thread
 import argparse
 import asyncio
+import collections
 import concurrent.futures
 import datetime
 import functools
@@ -30,9 +31,8 @@ from . import resource
 __version__ = "7.1.0"
 
 
+CLOSED = object()
 _PRIORITY_DEFAULT = 0
-
-
 _CDOTS = "…"
 
 
@@ -476,6 +476,106 @@ class _FileJob(_Job):
     def _credential_of(self, uri):
         meta = self.dsl.metadata[uri]
         return meta["credential"] if "credential" in meta else None
+
+
+def _make_channel(name=None, loop=None):
+    """
+    >>> cin, cout1 = _make_channel()
+    >>> cout2 = cout1.dup()
+    >>> cin.put(1)
+    """
+    chan = _Channel(name=name, loop=loop)
+    return chan.cin, chan.couts[0]
+
+
+class _Channel:
+    def __init__(self, name=None, loop=None):
+        self.name = name
+        self.lock = threading.Lock()
+        self.buf = []
+        if loop is None:
+            self.loop = asyncio.get_event_loop()
+        else:
+            self.loop = loop
+
+        self.cin = _ChannelInput(chan=self)
+        # todo: use WeakSet.
+        self.couts = [_ChannelOutput(chan=self)]
+        self.closed = False
+
+    def __len__(self):
+        return len(self.buf)
+
+    def put(self, x):
+        with self.lock:
+            if self.closed:
+                raise ValueError(f"You should not put {x} to the closed channel {self}")
+            self.buf.append(x)
+        for cout in self.couts:
+            self.loop.call_soon_threadsafe(cout.wakeup_next)
+
+    def dup(self):
+        cout = _ChannelOutput(chan=self)
+        with self.lock:
+            self.couts.append(cout)
+        return cout
+
+    def close(self):
+        with self.lock:
+            for cout in self.couts:
+                cout.put(CLOSED)
+            self.closed = True
+
+
+class _ChannelInput:
+    def __init__(self, chan):
+        self.chan = chan
+
+    def put(self, x):
+        return self.chan.put(x)
+
+    def close(self):
+        return self.chan.close()
+
+
+class _ChannelOutput:
+    def __init__(self, chan):
+        self.chan = chan
+        self._ptr = 0
+        self._getters = collections.deque()
+
+    def __len__(self):
+        return len(self.chan)
+
+    async def get(self):
+        while len(self) <= self._ptr:
+            getter = self.chan.loop.create_future()
+            self._getters.append(getter)
+            # See https://github.com/python/asyncio/pull/269 for the discussion.
+            try:
+                # CancelledError is raised if the caller is `cancele()`ed.
+                await getter
+            except:  # Catch everything since we (including Guido) are not sure if CancelledError is the only exception to be raised.
+                # If the exception is not raised by a `cancel()` call (we are unsure of the exact situation), `getter`'s state could be `_PENDING`.
+                # This `cancel()` call is written for safety.
+                getter.cancel()
+                # If `getter` was waked up by `put`, and then the caller is `cancel()`ed (hence `getter.cancelled()` is `False`), we should wake up another getter.
+                if self._buf and not getter.cancelled():
+                    self.wakeup_next(self._getters)
+                raise
+        x = self.chan.buf[self._ptr]
+        self._ptr += 1
+        return x
+
+    def dup(self):
+        return self.chan.dup()
+
+    def wakeup_next(self, waiters):
+        while waiters:
+            waiter = waiters.popleft()
+            if not waiter.done():
+                waiter.set_result(None)
+                break
 
 
 class _WorkItem:
