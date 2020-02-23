@@ -317,7 +317,7 @@ class _Job:
 
     def invoke(self):
         self.dsl.event_loop.call_soon_threadsafe(
-            self.dsl.event_loop.create_task, self._invoke(())
+            self.dsl.event_loop.create_task, self.ainvoke(())
         )
         return self
 
@@ -338,7 +338,7 @@ class _Job:
             ts=self.ts,
         )
 
-    async def _invoke(self, call_chain):
+    async def ainvoke(self, call_chain):
         # This coroutine runs inside self.dsl.event_loop.
         logger.debug(self)
         if not self.invoked:
@@ -360,7 +360,7 @@ class _Job:
                         raise exception.Err(f"No rule to make {d}")
 
                     child = self.dsl.job_of_target[d]
-                self.dsl.event_loop.create_task(child._invoke(cc))
+                self.dsl.event_loop.create_task(child.ainvoke(cc))
                 children.append(child)
             for child in children:
                 await child.adone.wait()
