@@ -99,16 +99,18 @@ def _(v):
     @loop(path for path in v_test_files if path.endswith(".sh"))
     def _(test_sh):
         test_sh_done = test_sh + ".done"
-        check_v_jobs.append(test_sh_done)
 
         @file([test_sh_done], [test_sh] + v_py_files, desc=f"Test {test_sh}")
-        def _(j):
+        def job(j):
             sh(
                 f"""
 {j.ds[0]}
+mkdir -p "$(dirname "{j.ts[0]}")"
 touch {j.ts[0]}
                 """
             )
+
+        check_v_jobs.extend(job.ts_unique)
 
     @loop(path for path in v_test_files if path.endswith(".py"))
     def _(test_py):

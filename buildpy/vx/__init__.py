@@ -63,6 +63,7 @@ class DSL:
 
         logger.setLevel(getattr(logging, self.args.log))
         self.job_of_target = _tval.NonOverwritableDict()
+        self.jobs_of_key = _tval.TListOf()
         self.time_of_dep_cache = _tval.Cache()
         self.metadata = _tval.TDefaultDict()
         self.event_loop = _event_loop_of()
@@ -123,6 +124,10 @@ class DSL:
         priority=_PRIORITY_DEFAULT,
         data=None,
         cut=False,
+        key=None,
+        auto=False,
+        auto_prefix=None,
+        auto_use_ds_structure=False,
     ):
         """Declare a file job.
         Arguments:
@@ -134,6 +139,18 @@ class DSL:
         if cut:
             return None
 
+        if auto:
+            auto_prefix = _coalesce(auto_prefix, self.args.auto_prefix)
+            ds = _de_with_meta(dict(), deps)
+            # The use of `+ "/" +` is intentional.
+            ts_prefix = (
+                auto_prefix
+                + "/"
+                + _convenience.hash_dir_of(
+                    dict(data=data, ds=ds if auto_use_ds_structure else _unique_of(ds))
+                )
+            )
+            targets = _prepend_prefix(ts_prefix, targets)
         j = _FileJob(
             None,
             targets,
@@ -144,16 +161,26 @@ class DSL:
             priority=priority,
             dsl=self,
             data=data,
+            key=key,
         )
         return j
 
     def phony(
-        self, target, deps, desc=None, priority=_PRIORITY_DEFAULT, data=None, cut=False
+        self,
+        target,
+        deps,
+        desc=None,
+        priority=_PRIORITY_DEFAULT,
+        data=None,
+        cut=False,
+        key=None,
     ):
         if cut:
             return None
 
-        j = _PhonyJob(_do_nothing, [target], deps, desc, priority, dsl=self, data=data)
+        j = _PhonyJob(
+            _do_nothing, [target], deps, desc, priority, dsl=self, data=data, key=key
+        )
         return j
 
     def run(self):
@@ -250,7 +277,7 @@ class _ExecutionLogger:
 
 
 class _Job:
-    def __init__(self, f, ts, ds, desc, priority, dsl, data):
+    def __init__(self, f, ts, ds, desc, priority, dsl, data, key):
         self.done = threading.Event()
         self.adone = asyncio.Event()
         self.executed = False  # This flag is used to propagate dry-run.
@@ -266,12 +293,14 @@ class _Job:
         self.desc = desc
         self.priority = priority
         self.dsl = dsl
+        self.key = key
 
         self.invoked = False
         self.run_future = None
 
         for t in self.ts_unique:
             self.dsl.job_of_target[t] = self
+        self.dsl.jobs_of_key.append(key, self)
 
         # User data.
         self.data = data
@@ -332,6 +361,7 @@ class _Job:
             serial=self.serial,
             successed=self.successed,
             ts=self.ts,
+            key=self.key,
         )
 
     async def ainvoke(self, call_chain):
@@ -389,17 +419,17 @@ class _Job:
 
 
 class _PhonyJob(_Job):
-    def __init__(self, f, ts, ds, desc, priority, dsl, data):
+    def __init__(self, f, ts, ds, desc, priority, dsl, data, key):
         if not (isinstance(ts, list) and len(ts) == 1):
             raise exception.Err(
                 f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}"
             )
-        super().__init__(f, ts, ds, desc, priority, dsl=dsl, data=data)
+        super().__init__(f, ts, ds, desc, priority, dsl=dsl, data=data, key=key)
 
 
 class _FileJob(_Job):
-    def __init__(self, f, ts, ds, desc, use_hash, serial, priority, dsl, data):
-        super().__init__(f, ts, ds, desc, priority, dsl=dsl, data=data)
+    def __init__(self, f, ts, ds, desc, use_hash, serial, priority, dsl, data, key):
+        super().__init__(f, ts, ds, desc, priority, dsl=dsl, data=data, key=key)
         self._use_hash = use_hash
         self.serial = serial
 
@@ -711,6 +741,11 @@ def _parse_argv(argv):
         default=_convenience.jp(buildpy_dir, "resource_hash"),
         help="Directory to store resource hash values.",
     )
+    parser.add_argument(
+        "--auto_prefix",
+        default=_convenience.jp(buildpy_dir, "auto"),
+        help="Directory to store automatically named resources.",
+    )
     parser.add_argument("--message", default="", help="Message.")
     args = parser.parse_args(argv)
     assert args.jobs > 0
@@ -837,6 +872,20 @@ def _event_loop_of():
     th = threading.Thread(target=loop.run_forever, daemon=True)
     th.start()
     return loop
+
+
+def _prepend_prefix(prefix, x):
+    def impl(x):
+        if isinstance(x, _WithMeta):
+            return _WithMeta(impl(x.val), **x.meta)
+        elif isinstance(x, list):
+            return [impl(v) for v in x]
+        elif isinstance(x, dict):
+            return {k: impl(v) for k, v in x.items()}
+        else:
+            return _convenience.jp(prefix, x)
+
+    return impl(x)
 
 
 def _de_with_meta(metadata, x):
