@@ -30,7 +30,7 @@ cat <<EOF > build.py
 import os
 import sys
 
-import buildpy.vx
+import buildpy.v7
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -38,7 +38,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.v7.DSL(sys.argv, use_hash=False)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh

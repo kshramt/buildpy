@@ -1,5 +1,5 @@
 #!/bin/bash
-# @(#) -j
+# @(#) -l
 
 # set -xv
 set -o nounset
@@ -31,7 +31,7 @@ import os
 import sys
 import time
 
-import buildpy.vx
+import buildpy.v7
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -39,7 +39,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.v7.DSL(sys.argv, use_hash=False)
 file = dsl.file
 phony = dsl.phony
 let = dsl.let
@@ -47,14 +47,21 @@ sh = dsl.sh
 rm = dsl.rm
 
 
-nx = 7
-ny = 7
-nz = 7
+nx = 3
+ny = 3
+nz = 3
 dt = 0.1
+
 
 xs = ["x" + str(i) for i in range(nx)]
 ys = ["y" + str(i) for i in range(ny)]
 zs = ["z" + str(i) for i in range(nz)]
+
+
+def getloadavg():
+    return (3, None, None)
+
+os.getloadavg = getloadavg
 
 
 @phony("all", xs)
@@ -91,7 +98,7 @@ if __name__ == '__main__':
     t1 = time.time()
     dsl.run()
     t2 = time.time()
-    assert t2 - t1 < dt*(1 + nx*(1 + ny*(1 + nz)))/10
+    assert t2 - t1 > dt*(1 + nx*(1 + ny*(1 + nz)))
 EOF
 
-"$PYTHON" build.py -j20 --use_hash False
+"$PYTHON" build.py -j20 -l2

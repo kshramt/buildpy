@@ -11,7 +11,6 @@ export IFS=$' \t\n'
 export LANG=en_US.UTF-8
 umask u=rwx,g=,o=
 
-
 readonly tmp_dir="$(mktemp -d)"
 
 finalize(){

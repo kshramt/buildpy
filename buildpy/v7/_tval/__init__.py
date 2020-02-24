@@ -98,6 +98,30 @@ class Cache:
                 return val
 
 
+class TSet(TVal):
+    def __init__(self):
+        super().__init__(set())
+
+    def __len__(self):
+        with self._lock:
+            return len(self._val)
+
+    def __iter__(self):
+        return iter(self.val())
+
+    def add(self, x):
+        with self._lock:
+            self._val.add(x)
+
+    def remove(self, x):
+        with self._lock:
+            self._val.remove(x)
+
+    def pop(self):
+        with self._lock:
+            return self._val.pop()
+
+
 class TInt(TVal):
     def __init__(self, val):
         super().__init__(val)
@@ -117,52 +141,3 @@ class NonOverwritableDict(TDict):
             if k in self.data:
                 raise Err(f"Tried to overwrite {k} with {v} for {self}")
             self.data[k] = v
-
-
-class TListOf:
-    def __init__(self):
-        self.data = dict()
-        self.lock = threading.RLock()
-
-    def __len__(self):
-        with self.lock:
-            return len(self.data)
-
-    def __getitem__(self, k):
-        with self.lock:
-            return self.data[k]
-
-    def __setitem__(self, k, v):
-        with self.lock:
-            self.data[k] = v
-
-    def __contains__(self, k):
-        with self.lock:
-            return k in self.data
-
-    def __repr__(self):
-        with self.lock:
-            return self.__class__.__name__ + "(" + repr(self.data) + ")"
-
-    def append(self, k, v):
-        with self.lock:
-            if k in self.data:
-                self.data[k].append(v)
-            else:
-                self.data[k] = [v]
-
-    def get(self, k, default=None):
-        with self.lock:
-            return self.data.get(k, default)
-
-    def items(self):
-        with self.lock:
-            return self.data.items()
-
-    def keys(self):
-        with self.lock:
-            return self.data.keys()
-
-    def values(self):
-        with self.lock:
-            return self.data.values()

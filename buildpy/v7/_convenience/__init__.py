@@ -170,8 +170,6 @@ def serialize(x):
     * String
     * List
     * Dictionary
-    * Tuple
-    * Set
 
     == Examples
 
@@ -185,8 +183,6 @@ def serialize(x):
     'di1_si1_ali4_i1_fi20_0x1.0000000000000p+1li2_fi20_0x1.8000000000000p+1di2_fi24_-0x1.0cc7a8fa052b1p+1003si3_直列化i4_li2_fi21_-0x1.4000000000000p+2fi9_-0x0.0p+0n'
     >>> serialize((1, 2))
     'ti2_i1_i2_'
-    >>> serialize(set([1, 2]))
-    'Si2_i1_i2_'
     """
 
     fp = io.StringIO()
@@ -210,11 +206,6 @@ def serialize(x):
             _save_int(len(x))
             for v in x:
                 _save(v)
-        elif isinstance(x, set):
-            fp.write("S")
-            _save_int(len(x))
-            for v in sorted(x):
-                _save(v)
         elif isinstance(x, tuple):
             fp.write("t")
             _save_int(len(x))
@@ -223,7 +214,7 @@ def serialize(x):
         elif isinstance(x, dict):
             fp.write("d")
             _save_int(len(x))
-            for k in sorted(x.keys()):
+            for k in sorted(x.keys(), key=serialize):
                 _save(k)
                 _save(x[k])
         else:

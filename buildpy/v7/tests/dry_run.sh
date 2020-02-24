@@ -28,22 +28,16 @@ cat <<EOF > build.py
 #!/usr/bin/python3
 
 import os
-import logging
 import sys
 
-import buildpy.vx
+import buildpy.v7
 
 
 def _setup_logger(level):
+    import logging
     logger = logging.getLogger()
     hdl = logging.StreamHandler(sys.stderr)
-    hdl.setFormatter(
-        logging.Formatter(
-            "%(levelname)s %(process)d %(thread)d %(asctime)s %(filename)s %(lineno)d %(funcName)s %(message)s",
-            "%y%m%d%H%M%S",
-        )
-    )
-    logger.addHandler(hdl)
+    hdl.setFormatter(logging.Formatter("%(levelname)s\t%(process)d\t%(asctime)s\t%(filename)s\t%(funcName)s\t%(lineno)d\t%(message)s"))
     hdl.setLevel(getattr(logging, level))
     logger.setLevel(getattr(logging, level))
     return logger
@@ -54,7 +48,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.v7.DSL(sys.argv, use_hash=False)
 logger = _setup_logger(dsl.args.log)
 
 file = dsl.file
@@ -105,11 +99,11 @@ EOF
 touch u1 u2
 
 {
-   "$PYTHON" build.py --use_hash False
+   "$PYTHON" build.py
    # HFS has only 1 s time resolution
    sleep 1.1
    touch t1
-   "$PYTHON" build.py --use_hash False -n
+   "$PYTHON" build.py -n
 } 1> actual.1 2> actual.2
 LC_ALL=C sort actual.2 > actual.2.sort
 

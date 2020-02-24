@@ -30,7 +30,7 @@ cat <<EOF > build.py
 import os
 import sys
 
-import buildpy.vx
+import buildpy.v7
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -38,7 +38,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.v7.DSL(sys.argv, use_hash=False)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
@@ -82,26 +82,26 @@ EOF
    # initial
    echo y >| y
    echo z >| z
-   "$PYTHON" build.py --use_hash False
+   "$PYTHON" build.py
    # contents have changed
    sleep 1.1
    echo more >> y
-   "$PYTHON" build.py --use_hash False
+   "$PYTHON" build.py
    # contents have not changed
    sleep 1.1
    touch y
-   "$PYTHON" build.py --use_hash False
+   "$PYTHON" build.py
    echo ==
    echo == 1>&2
    # Run-again
-   "$PYTHON" build.py --use_hash False
+   "$PYTHON" build.py
    echo ooo
    echo ooo 1>&2
    # contents have changed, but timestamp is older
    sleep 1.1
    echo more more >> y
    touch --date 1970-01-01 y
-   "$PYTHON" build.py --use_hash False
+   "$PYTHON" build.py
 } 1> actual.1 2> actual.2
 
 git diff --color-words --no-index --word-diff expect.1 actual.1

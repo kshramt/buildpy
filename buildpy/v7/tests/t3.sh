@@ -1,5 +1,5 @@
 #!/bin/bash
-# @(#) smoke test
+# @(#) -D
 
 # set -xv
 set -o nounset
@@ -30,7 +30,7 @@ cat <<EOF > build.py
 import os
 import sys
 
-import buildpy.vx
+import buildpy.v7
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -38,17 +38,17 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.v7.DSL(sys.argv, use_hash=False)
 file = dsl.file
 phony = dsl.phony
-let = dsl.let
 sh = dsl.sh
 rm = dsl.rm
 
 
-@let
-def _():
-    phony("all", [], desc="Default target")
+phony("all", ["check"], desc="Default target")
+phony("check", ["t1", "t2"], desc="Run tests")
+phony("t2", [], desc="Test 2")
+phony("t1", [], desc="Test 1")
 
 
 if __name__ == '__main__':
@@ -57,8 +57,16 @@ EOF
 
 
 cat <<EOF > expect
+all
+	Default target
+check
+	Run tests
+t1
+	Test 1
+t2
+	Test 2
 EOF
 
-"$PYTHON" build.py --use_hash False > actual
+"$PYTHON" build.py -D > actual
 
 git diff --color-words --no-index --word-diff expect actual

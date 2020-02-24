@@ -39,7 +39,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv, use_hash=False)
+dsl = buildpy.vx.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 loop = dsl.loop
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     dsl.run()
 EOF
 
-"$PYTHON" build.py | LC_ALL=C sort >| actual
+"$PYTHON" build.py --use_hash False | LC_ALL=C sort >| actual
 cat <<EOF >| expected
 0_0
 0_1

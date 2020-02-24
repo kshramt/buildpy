@@ -31,7 +31,7 @@ import os
 import sys
 import time
 
-import buildpy.vx
+import buildpy.v7
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -39,10 +39,10 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.v7.DSL(sys.argv, use_hash=False)
 file = dsl.file
 phony = dsl.phony
-let = dsl.let
+loop = dsl.loop
 sh = dsl.sh
 rm = dsl.rm
 
@@ -62,29 +62,27 @@ def _(j):
     # print(j)
     time.sleep(dt)
 
-for x in xs:
-    @let
-    def _(x=x):
-        @phony(x, [x + y for y in ys])
+
+@loop(xs)
+def _(x):
+    @phony(x, [x + y for y in ys])
+    def _(j):
+        # print(j)
+        time.sleep(dt)
+
+    @loop(ys)
+    def _(y):
+        @phony(x + y, [x + y + z for z in zs])
         def _(j):
             # print(j)
             time.sleep(dt)
 
-        for y in ys:
-            @let
-            def _(y=y):
-                @phony(x + y, [x + y + z for z in zs])
-                def _(j):
-                    # print(j)
-                    time.sleep(dt)
-
-                for z in zs:
-                    @let
-                    def _(z=z):
-                        @phony(x + y + z, [])
-                        def _(j):
-                            # print(j)
-                            time.sleep(dt)
+        @loop(zs)
+        def _(z):
+            @phony(x + y + z, [])
+            def _(j):
+                # print(j)
+                time.sleep(dt)
 
 
 if __name__ == '__main__':
@@ -94,4 +92,4 @@ if __name__ == '__main__':
     assert t2 - t1 < dt*(1 + nx*(1 + ny*(1 + nz)))/10
 EOF
 
-"$PYTHON" build.py -j20 --use_hash False
+"$PYTHON" build.py -j20

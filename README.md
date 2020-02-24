@@ -125,6 +125,10 @@ dsl.run()
 
 ## News
 
+### v8.0.0
+
+- Support automatic target naming via `@file(auto=True)`.
+
 ### v7.1.0
 
 - Support specifying targets and dependencies as `dict`s.
@@ -159,7 +163,7 @@ dsl.run()
     ```
     @file(ts, ds, data=dict(params=dict(a=1, b=2)))
     def this(j):
-        print(j.data.params)
+        print(j.data["params"])
     ```
 
 ### v4.3.0

@@ -11,6 +11,7 @@ export IFS=$' \t\n'
 export LANG=en_US.UTF-8
 umask u=rwx,g=,o=
 
+
 readonly tmp_dir="$(mktemp -d)"
 
 finalize(){
@@ -31,7 +32,7 @@ import os
 import sys
 import time
 
-import buildpy.vx
+import buildpy.v7
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -39,7 +40,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.v7.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh

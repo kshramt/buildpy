@@ -1,5 +1,5 @@
 #!/bin/bash
-# @(#) The minimum mtime of targets should be compared with the maximum mtime of dependencies
+# @(#) set `use_hash` locally
 
 # set -xv
 set -o nounset
@@ -30,7 +30,7 @@ cat <<EOF > build.py
 import os
 import sys
 
-import buildpy.vx
+import buildpy.v7
 
 
 os.environ["SHELL"] = "/bin/bash"
@@ -38,43 +38,45 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv)
+dsl = buildpy.v7.DSL(sys.argv, use_hash=False)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
 rm = dsl.rm
 
 
-phony("all", ["a", "b"], desc="Default target")
-
-@file(["a", "b"], ["c", "d"])
+@phony("all", ["x"])
 def _(j):
-    sh("sleep 2")
-    sh("touch" + " " + " ".join(j.ts))
+    print(j.ts[0], j.ds[0])
 
-@file(["c", "d"], [])
+@file(["x"], ["y", "z"], use_hash=True)
 def _(j):
-    sh("touch" + " " + " ".join(j.ts))
+    print(j.ts[0], j.ds[0], j.ds[1])
+    sh("touch " + j.ts[0])
 
 
 if __name__ == '__main__':
     dsl.run()
 EOF
 
-cat <<EOF > expect.2
-touch c d
-sleep 2
-touch a b
-sleep 2
-touch a b
+cat <<EOF > expect.1
+x y z
+all x
+all x
 EOF
 
-touch u1 u2
+cat <<EOF > expect.2
+touch x
+EOF
 
 {
-   "$PYTHON" build.py --use_hash False
-   touch --date 1970-01-01 b
-   "$PYTHON" build.py --use_hash False
-} 2> actual.2
+   echo y >| y
+   echo z >| z
+   "$PYTHON" build.py
+   sleep 1.1
+   touch y
+   "$PYTHON" build.py
+} 1> actual.1 2> actual.2
 
+git diff --color-words --no-index --word-diff expect.1 actual.1
 git diff --color-words --no-index --word-diff expect.2 actual.2

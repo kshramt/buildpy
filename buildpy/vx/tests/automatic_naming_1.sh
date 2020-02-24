@@ -1,5 +1,5 @@
 #!/bin/bash
-# @(#) -P
+# @(#) Test the automatic naming capability.
 
 # set -xv
 set -o nounset
@@ -45,50 +45,28 @@ sh = dsl.sh
 rm = dsl.rm
 
 
-@file(dict(a="a",b="b"), dict(p="p", q=["q1", "q2"]))
-def _(j):
-    sh(
-        f"""
-        cat "{j.ds["p"]}" >| "{j.ts["a"]}"
-        cat "{j.ds["q"][0]}" >| "{j.ts["b"]}"
-        """
-    )
+@file(["x"], ["y", "z"], use_hash=True, key=("y", 1), data=[dict(a=1)], auto=True)
+def job(j):
+    pass
 
+@phony("all", job.ts_unique)
+def pj(j):
+    pass
 
-@file(["p", [dict(q1="q1", q2=["q2"])]], dict())
-def _(j):
-    sh(
-        f"""
-        touch "{j.ts[0]}"
-        touch "{j.ts[1][0]["q1"]}"
-        touch "{j.ts[1][0]["q2"][0]}"
-        """
-    )
-
-
-phony("all", ["b"])
+assert set(dsl.jobs_of_key.keys()) == set([None, ("y", 1)]), dsl.jobs_of_key
+assert len(dsl.jobs_of_key[None]) == 1, dsl.jobs_of_key
+assert len(dsl.jobs_of_key[("y", 1)]) == 1, dsl.jobs_of_key
+n_auto_prefix = len(dsl.args.auto_prefix)
+pjds = [x[n_auto_prefix:] for x in pj.ds]
+assert pjds == ["/69/9d41ceccb970de284da347cad339f1afcc2cd5/x"], pjds
 
 
 if __name__ == '__main__':
     dsl.run()
 EOF
 
-"$PYTHON" build.py 2> /dev/null
-cat <<EOF > expected
-a
-b
-	p
-	q1
-	q2
-
-all
-	b
-
-p
-q1
-q2
-
-EOF
-
-"$PYTHON" build.py -P > actual
-git diff --color-words --no-index --word-diff expected actual
+{
+   echo y >| y
+   echo z >| z
+   "$PYTHON" build.py
+}

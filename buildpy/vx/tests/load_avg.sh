@@ -11,7 +11,6 @@ export IFS=$' \t\n'
 export LANG=en_US.UTF-8
 umask u=rwx,g=,o=
 
-
 readonly tmp_dir="$(mktemp -d)"
 
 finalize(){
@@ -39,7 +38,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv, use_hash=False)
+dsl = buildpy.vx.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 let = dsl.let
@@ -101,4 +100,4 @@ if __name__ == '__main__':
     assert t2 - t1 > dt*(1 + nx*(1 + ny*(1 + nz)))
 EOF
 
-"$PYTHON" build.py -j20 -l2
+"$PYTHON" build.py -j20 -l2 --use_hash False
