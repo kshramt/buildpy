@@ -125,6 +125,10 @@ dsl.run()
 
 ## News
 
+### v8.0.0
+
+- Support automatic target naming via `@file(auto=True)`.
+
 ### v7.1.0
 
 - Support specifying targets and dependencies as `dict`s.

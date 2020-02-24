@@ -17,6 +17,7 @@ import sys
 import threading
 import time
 import traceback
+import typing
 import uuid
 
 import psutil
@@ -28,13 +29,14 @@ from . import exception
 from . import resource
 
 
-__version__ = "7.1.0"
-
-
+__version__ = "8.0.0"
+T1 = typing.TypeVar("T1")
+T2 = typing.TypeVar("T2")
+TK = typing.TypeVar("TK")
+TV = typing.TypeVar("TV")
 CLOSED = object()
 _PRIORITY_DEFAULT = 0
 _CDOTS = "…"
-
 
 # Main
 
@@ -53,21 +55,14 @@ class DSL:
     uriparse = staticmethod(_convenience.uriparse)
     hash_dir_of = staticmethod(_convenience.hash_dir_of)
 
-    def __init__(self, argv, use_hash=True, terminate_subprocesses=True):
-        self.id_dsl = (
-            datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
-            + "-"
-            + str(uuid.uuid4())
-        )
+    def __init__(self, argv):
         self.args = _parse_argv(argv[1:])
         assert self.args.jobs > 0
         assert self.args.load_average > 0
 
         logger.setLevel(getattr(logging, self.args.log))
         self.job_of_target = _tval.NonOverwritableDict()
-        self.jobs = _tval.TSet()
-        self._use_hash = use_hash
-        self._terminate_subprocesses = terminate_subprocesses
+        self.jobs_of_key = _tval.TListOf()
         self.time_of_dep_cache = _tval.Cache()
         self.metadata = _tval.TDefaultDict()
         self.event_loop = _event_loop_of()
@@ -81,9 +76,9 @@ class DSL:
         self._cleanuped = False
 
         self.execution_log_dir = (
-            None
-            if self.args.execution_log_dir is None
-            else _convenience.jp(self.args.execution_log_dir, self.id_dsl)
+            _convenience.jp(self.args.execution_log_dir, self.args.id)
+            if self.args.execution_log_dir_append_id
+            else self.args.execution_log_dir
         )
         if self.execution_log_dir:
             _convenience.mkdir(self.execution_log_dir)
@@ -92,7 +87,7 @@ class DSL:
                     dict(
                         args=vars(self.args),
                         executable=sys.executable,
-                        id_dsl=self.id_dsl,
+                        id=self.args.id,
                         version=sys.version,
                         __name__=__name__,
                         __version__=__version__,
@@ -128,6 +123,10 @@ class DSL:
         priority=_PRIORITY_DEFAULT,
         data=None,
         cut=False,
+        key=None,
+        auto=False,
+        auto_prefix=None,
+        auto_use_ds_structure=False,
     ):
         """Declare a file job.
         Arguments:
@@ -139,35 +138,55 @@ class DSL:
         if cut:
             return None
 
+        if auto:
+            auto_prefix = _coalesce(auto_prefix, self.args.auto_prefix)
+            ds = _de_with_meta(dict(), deps)
+            # The use of `+ "/" +` is intentional.
+            ts_prefix = (
+                auto_prefix
+                + "/"
+                + _convenience.hash_dir_of(
+                    dict(data=data, ds=ds if auto_use_ds_structure else _unique_of(ds))
+                )
+            )
+            targets = _prepend_prefix(ts_prefix, targets)
         j = _FileJob(
             None,
             targets,
             deps,
             desc,
-            _coalesce(use_hash, self._use_hash),
+            _coalesce(use_hash, self.args.use_hash),
             serial,
             priority=priority,
             dsl=self,
             data=data,
+            key=key,
         )
-        self.jobs.add(j)
         return j
 
     def phony(
-        self, target, deps, desc=None, priority=_PRIORITY_DEFAULT, data=None, cut=False
+        self,
+        target,
+        deps,
+        desc=None,
+        priority=_PRIORITY_DEFAULT,
+        data=None,
+        cut=False,
+        key=None,
     ):
         if cut:
             return None
 
-        j = _PhonyJob(_do_nothing, [target], deps, desc, priority, dsl=self, data=data)
-        self.jobs.add(j)
+        j = _PhonyJob(
+            _do_nothing, [target], deps, desc, priority, dsl=self, data=data, key=key
+        )
         return j
 
     def run(self):
         if self.args.descriptions:
-            _print_descriptions(self.jobs)
+            _print_descriptions(set(self.job_of_target.values()))
         elif self.args.dependencies:
-            _print_dependencies(self.jobs)
+            _print_dependencies(set(self.job_of_target.values()))
         elif self.args.dependencies_dot:
             print(self.dependencies_dot())
         elif self.args.dependencies_json:
@@ -209,10 +228,10 @@ class DSL:
             raise NotImplementedError(f"rm({repr(uri)}) is not supported")
 
     def dependencies_json(self):
-        return _dependencies_json_of(self.jobs)
+        return _dependencies_json_of(set(self.job_of_target.values()))
 
     def dependencies_dot(self):
-        return _dependencies_dot_of(self.jobs)
+        return _dependencies_dot_of(set(self.job_of_target.values()))
 
     def _cleanup(self):
         if self._cleanuped:
@@ -221,10 +240,10 @@ class DSL:
         self.executor.shutdown(wait=False)
         self.event_loop.call_soon_threadsafe(self.event_loop.stop)
         # self.event_loop.call_soon_threadsafe(self.event_loop.close)
-        if self._terminate_subprocesses:
+        if self.args.terminate_subprocesses:
             _terminate_subprocesses()
 
-    def _die(self, e):
+    def die(self, e: str):
         logger.critical(e)
         self._cleanup()
         _thread.interrupt_main()
@@ -257,7 +276,7 @@ class _ExecutionLogger:
 
 
 class _Job:
-    def __init__(self, f, ts, ds, desc, priority, dsl, data):
+    def __init__(self, f, ts, ds, desc, priority, dsl, data, key):
         self.done = threading.Event()
         self.adone = asyncio.Event()
         self.executed = False  # This flag is used to propagate dry-run.
@@ -273,12 +292,14 @@ class _Job:
         self.desc = desc
         self.priority = priority
         self.dsl = dsl
+        self.key = key
 
         self.invoked = False
         self.run_future = None
 
         for t in self.ts_unique:
             self.dsl.job_of_target[t] = self
+        self.dsl.jobs_of_key.append(key, self)
 
         # User data.
         self.data = data
@@ -320,7 +341,7 @@ class _Job:
 
     def invoke(self):
         self.dsl.event_loop.call_soon_threadsafe(
-            self.dsl.event_loop.create_task, self._invoke(())
+            self.dsl.event_loop.create_task, self.ainvoke(())
         )
         return self
 
@@ -339,9 +360,10 @@ class _Job:
             serial=self.serial,
             successed=self.successed,
             ts=self.ts,
+            key=self.key,
         )
 
-    async def _invoke(self, call_chain):
+    async def ainvoke(self, call_chain):
         # This coroutine runs inside self.dsl.event_loop.
         logger.debug(self)
         if not self.invoked:
@@ -363,7 +385,7 @@ class _Job:
                         raise exception.Err(f"No rule to make {d}")
 
                     child = self.dsl.job_of_target[d]
-                self.dsl.event_loop.create_task(child._invoke(cc))
+                self.dsl.event_loop.create_task(child.ainvoke(cc))
                 children.append(child)
             for child in children:
                 await child.adone.wait()
@@ -392,21 +414,21 @@ class _Job:
             self.dsl.deferred_errors.put((self, e_str))
         else:
             self.dsl.got_error = True
-            self.dsl._die(e_str)
+            self.dsl.die(e_str)
 
 
 class _PhonyJob(_Job):
-    def __init__(self, f, ts, ds, desc, priority, dsl, data):
+    def __init__(self, f, ts, ds, desc, priority, dsl, data, key):
         if not (isinstance(ts, list) and len(ts) == 1):
             raise exception.Err(
                 f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}"
             )
-        super().__init__(f, ts, ds, desc, priority, dsl=dsl, data=data)
+        super().__init__(f, ts, ds, desc, priority, dsl=dsl, data=data, key=key)
 
 
 class _FileJob(_Job):
-    def __init__(self, f, ts, ds, desc, use_hash, serial, priority, dsl, data):
-        super().__init__(f, ts, ds, desc, priority, dsl=dsl, data=data)
+    def __init__(self, f, ts, ds, desc, use_hash, serial, priority, dsl, data, key):
+        super().__init__(f, ts, ds, desc, priority, dsl=dsl, data=data, key=key)
         self._use_hash = use_hash
         self.serial = serial
 
@@ -447,7 +469,12 @@ class _FileJob(_Job):
                 t_ds = t
         try:
             t_ts = min(
-                _mtime_of(uri=t, use_hash=False, credential=self._credential_of(t))
+                _mtime_of(
+                    uri=t,
+                    credential=self._credential_of(t),
+                    use_hash=False,
+                    resource_hash_dir=self.dsl.args.resource_hash_dir,
+                )
                 for t in self.ts_unique
             )
         except resource.exceptions:
@@ -468,8 +495,9 @@ class _FileJob(_Job):
             functools.partial(
                 _mtime_of,
                 uri=d,
-                use_hash=self._use_hash,
                 credential=self._credential_of(d),
+                use_hash=self._use_hash,
+                resource_hash_dir=self.dsl.args.resource_hash_dir,
             ),
         )
 
@@ -627,7 +655,7 @@ class _WorkItem:
             self.j.dsl.execution_logger_done.queue.put(self.j.to_execution_log_data())
         except Exception:  # Propagate Exception caused by a bug in buildpy code to the main thread.
             e_str = _str_of_exception()
-            self.j.dsl._die(e_str)
+            self.j.dsl.die(e_str)
 
     def __lt__(self, other):
         return self.j < other.j
@@ -715,6 +743,8 @@ class _WithMeta:
 
 
 def _parse_argv(argv):
+    buildpy_dir = _convenience.jp(os.getcwd(), ".buildpy")
+
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
@@ -787,10 +817,33 @@ def _parse_argv(argv):
         action="append",
         help="Cut the DAG at the job of the specified resource. You can specify --cut=target multiple times.",
     )
+    parser.add_argument("--use_hash", type=_bool_of_str, default=True)
+    parser.add_argument("--terminate_subprocesses", type=_bool_of_str, default=True)
+    parser.add_argument(
+        "--id",
+        default=(
+            datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            + "-"
+            + str(uuid.uuid4())
+        ),
+    )
     parser.add_argument(
         "--execution_log_dir",
         default=None,
         help="Directory to store the execution logs.",
+    )
+    parser.add_argument(
+        "--execution_log_dir_append_id", type=_bool_of_str, default=False
+    )
+    parser.add_argument(
+        "--resource_hash_dir",
+        default=_convenience.jp(buildpy_dir, "resource_hash"),
+        help="Directory to store resource hash values.",
+    )
+    parser.add_argument(
+        "--auto_prefix",
+        default=_convenience.jp(buildpy_dir, "auto"),
+        help="Directory to store automatically named resources.",
     )
     parser.add_argument("--message", default="", help="Message.")
     args = parser.parse_args(argv)
@@ -802,6 +855,8 @@ def _parse_argv(argv):
     if args.cut is None:
         args.cut = set()
     args.cut = sorted(set(args.cut))
+    if args.execution_log_dir is None:
+        args.execution_log_dir = _convenience.jp(buildpy_dir, "log", args.id)
     return args
 
 
@@ -873,16 +928,18 @@ def _node_of(name, node_of_name, i):
     return node, i
 
 
-def _escape(s):
+def _escape(s: str):
     return '"' + "".join('\\"' if x == '"' else x for x in s) + '"'
 
 
-def _mtime_of(uri, use_hash, credential):
+def _mtime_of(uri, use_hash, credential, resource_hash_dir):
     puri = DSL.uriparse(uri)
     if puri.scheme == "file":
         assert puri.netloc == "localhost", puri
     if puri.scheme in resource.of_scheme:
-        return resource.of_scheme[puri.scheme].mtime_of(uri, credential, use_hash)
+        return resource.of_scheme[puri.scheme].mtime_of(
+            uri, credential, use_hash, resource_hash_dir
+        )
     else:
         raise NotImplementedError(f"_mtime_of({repr(uri)}) is not supported")
 
@@ -914,6 +971,20 @@ def _event_loop_of():
     th = threading.Thread(target=loop.run_forever, daemon=True)
     th.start()
     return loop
+
+
+def _prepend_prefix(prefix, x):
+    def impl(x):
+        if isinstance(x, _WithMeta):
+            return _WithMeta(impl(x.val), **x.meta)
+        elif isinstance(x, list):
+            return [impl(v) for v in x]
+        elif isinstance(x, dict):
+            return {k: impl(v) for k, v in x.items()}
+        else:
+            return _convenience.jp(prefix, x)
+
+    return impl(x)
 
 
 def _de_with_meta(metadata, x):
@@ -948,7 +1019,7 @@ def _unique_of(xs):
     return sorted(ret)
 
 
-def _coalesce(x, default):
+def _coalesce(x: typing.Optional[T1], default: T1):
     return default if x is None else x
 
 
@@ -959,7 +1030,7 @@ def _contains(v, c):
         return False
 
 
-def _set_unique(d, k, v):
+def _set_unique(d: typing.MutableMapping[TK, TV], k: TK, v: TV):
     if k in d:
         raise exception.Err(f"{repr(k)} in {repr(d)}")
     d[k] = v
@@ -970,6 +1041,15 @@ def _cdotify(xs):
     if xs and len(xs) > 4:
         xs = xs[:3] + [_CDOTS]
     return xs
+
+
+def _bool_of_str(x):
+    if x == "True":
+        return True
+    elif x == "False":
+        return False
+    else:
+        raise ValueError(f"Unsupported value: {x}")
 
 
 def _do_nothing(*_):

@@ -36,7 +36,7 @@ python = os.environ["PYTHON"]
 
 dsl = buildpy.vx.DSL(sys.argv)
 logger = _setup_logger(dsl.args.log)
-logger.info(dsl.id_dsl)
+logger.info(dsl.args.id)
 file = dsl.file
 phony = dsl.phony
 loop = dsl.loop
@@ -75,7 +75,7 @@ phony("all", [], desc="The default target")
 def _(j):
     sh(
         f"""
-        {python} setup.py sdist
+{python} setup.py sdist
         """
     )
 
@@ -99,16 +99,18 @@ def _(v):
     @loop(path for path in v_test_files if path.endswith(".sh"))
     def _(test_sh):
         test_sh_done = test_sh + ".done"
-        check_v_jobs.append(test_sh_done)
 
         @file([test_sh_done], [test_sh] + v_py_files, desc=f"Test {test_sh}")
-        def _(j):
+        def job(j):
             sh(
                 f"""
-                {j.ds[0]}
-                touch {j.ts[0]}
+{j.ds[0]}
+mkdir -p "$(dirname "{j.ts[0]}")"
+touch {j.ts[0]}
                 """
             )
+
+        check_v_jobs.extend(job.ts_unique)
 
     @loop(path for path in v_test_files if path.endswith(".py"))
     def _(test_py):
@@ -121,8 +123,8 @@ def _(v):
         def _(j):
             sh(
                 f"""
-                {python} {j.ds[0]}
-                touch {j.ts[0]}
+{python} {j.ds[0]}
+touch {j.ts[0]}
                 """
             )
 
