@@ -38,7 +38,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv, use_hash=False)
+dsl = buildpy.vx.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 sh = dsl.sh
@@ -67,6 +67,6 @@ t2
 	Test 2
 EOF
 
-"$PYTHON" build.py -D > actual
+"$PYTHON" build.py -D --use_hash False > actual
 
 git diff --color-words --no-index --word-diff expect actual

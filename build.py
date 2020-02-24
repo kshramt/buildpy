@@ -36,7 +36,7 @@ python = os.environ["PYTHON"]
 
 dsl = buildpy.vx.DSL(sys.argv)
 logger = _setup_logger(dsl.args.log)
-logger.info(dsl.id_dsl)
+logger.info(dsl.args.id)
 file = dsl.file
 phony = dsl.phony
 loop = dsl.loop
@@ -75,7 +75,7 @@ phony("all", [], desc="The default target")
 def _(j):
     sh(
         f"""
-        {python} setup.py sdist
+{python} setup.py sdist
         """
     )
 
@@ -105,8 +105,8 @@ def _(v):
         def _(j):
             sh(
                 f"""
-                {j.ds[0]}
-                touch {j.ts[0]}
+{j.ds[0]}
+touch {j.ts[0]}
                 """
             )
 
@@ -121,8 +121,8 @@ def _(v):
         def _(j):
             sh(
                 f"""
-                {python} {j.ds[0]}
-                touch {j.ts[0]}
+{python} {j.ds[0]}
+touch {j.ts[0]}
                 """
             )
 

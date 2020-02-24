@@ -39,7 +39,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv, use_hash=False)
+dsl = buildpy.vx.DSL(sys.argv)
 file = dsl.file
 phony = dsl.phony
 let = dsl.let
@@ -94,4 +94,4 @@ if __name__ == '__main__':
     assert t2 - t1 < dt*(1 + nx*(1 + ny*(1 + nz)))/10
 EOF
 
-"$PYTHON" build.py -j20
+"$PYTHON" build.py -j20 --use_hash False

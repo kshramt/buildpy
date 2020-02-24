@@ -18,11 +18,9 @@ from .. import exception
 
 
 BUF_SIZE = 65536
-CACHE_DIR = _convenience.jp(os.getcwd(), ".buildpy")
 
 
 class Resource(abc.ABC):
-
     @classmethod
     @abc.abstractmethod
     def rm(cls, uri, credential):
@@ -30,7 +28,7 @@ class Resource(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def mtime_of(cls, uri, credential):
+    def mtime_of(cls, uri, credential, use_hash, resource_hash_dir):
         pass
 
     @classmethod
@@ -53,7 +51,7 @@ class LocalFile(Resource):
             return shutil.rmtree(puri.uri)
 
     @classmethod
-    def mtime_of(cls, uri, credential, use_hash):
+    def mtime_of(cls, uri, credential, use_hash, resource_hash_dir):
         """
         == Returns
         * min(uri_time, cache_time)
@@ -62,7 +60,9 @@ class LocalFile(Resource):
         t_uri = os.path.getmtime(puri.uri)
         if not use_hash:
             return t_uri
-        return _min_of_t_uri_and_t_cache(t_uri, functools.partial(_hash_of_path, puri.uri), puri)
+        return _min_of_t_uri_and_t_cache(
+            t_uri, functools.partial(_hash_of_path, puri.uri), puri, resource_hash_dir
+        )
 
     @classmethod
     def _check_uri(cls, uri):
@@ -91,7 +91,7 @@ class BigQuery(Resource):
         return client.delete_table(client.dataset(dataset).table(table))
 
     @classmethod
-    def mtime_of(cls, uri, credential, use_hash):
+    def mtime_of(cls, uri, credential, use_hash, resource_hash_dir):
         puri = cls._check_uri(uri)
         project, dataset, table = puri.netloc.split(".", 2)
         client = cls._client_of(credential, project)
@@ -112,7 +112,11 @@ class BigQuery(Resource):
                 # GOOGLE_APPLICATION_CREDENTIALS
                 cls._tls.cache[key] = google.cloud.bigquery.Client(project=project)
             else:
-                cls._tls.cache[key] = google.cloud.bigquery.Client.from_service_account_json(credential, project=project)
+                cls._tls.cache[
+                    key
+                ] = google.cloud.bigquery.Client.from_service_account_json(
+                    credential, project=project
+                )
         return cls._tls.cache[key]
 
     @classmethod
@@ -146,7 +150,7 @@ class GoogleCloudStorage(Resource):
         return blob.delete()
 
     @classmethod
-    def mtime_of(cls, uri, credential, use_hash):
+    def mtime_of(cls, uri, credential, use_hash, resource_hash_dir):
         puri = cls._check_uri(uri)
         client = cls._client_of(credential)
         bucket = client.get_bucket(puri.netloc)
@@ -157,7 +161,9 @@ class GoogleCloudStorage(Resource):
         t_uri = blob.time_created.timestamp()
         if not use_hash:
             return t_uri
-        return _min_of_t_uri_and_t_cache(t_uri, lambda: blob.md5_hash, puri)
+        return _min_of_t_uri_and_t_cache(
+            t_uri, lambda: blob.md5_hash, puri, resource_hash_dir
+        )
 
     @classmethod
     def _client_of(cls, credential):
@@ -171,7 +177,9 @@ class GoogleCloudStorage(Resource):
                 # GOOGLE_APPLICATION_CREDENTIALS
                 cls._tls.cache[key] = google.cloud.storage.Client()
             else:
-                cls._tls.cache[key] = google.cloud.storage.Client.from_service_account_json(credential)
+                cls._tls.cache[
+                    key
+                ] = google.cloud.storage.Client.from_service_account_json(credential)
         return cls._tls.cache[key]
 
     @classmethod
@@ -200,14 +208,16 @@ class S3(Resource):
         return client.delete_object(Bucket=puri.netloc, Key=puri.path[1:])
 
     @classmethod
-    def mtime_of(cls, uri, credential, use_hash):
+    def mtime_of(cls, uri, credential, use_hash, resource_hash_dir):
         puri = cls._check_uri(uri)
         client = cls._client_of(credential)
         head = client.head_object(Bucket=puri.netloc, Key=puri.path[1:])
         t_uri = head["LastModified"].timestamp()
         if not use_hash:
             return t_uri
-        return _min_of_t_uri_and_t_cache(t_uri, lambda: head["ETag"], puri)
+        return _min_of_t_uri_and_t_cache(
+            t_uri, lambda: head["ETag"], puri, resource_hash_dir
+        )
 
     @classmethod
     def _client_of(cls, credential):
@@ -223,7 +233,10 @@ class S3(Resource):
                 aws_access_key_id, aws_secret_access_key = None, None
             else:
                 aws_access_key_id, aws_secret_access_key = credential
-            cls._tls.cache[key] = boto3.session.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key).client("s3")
+            cls._tls.cache[key] = boto3.session.Session(
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key,
+            ).client("s3")
         return cls._tls.cache[key]
 
     @classmethod
@@ -255,12 +268,14 @@ register(GoogleCloudStorage)
 register(S3)
 
 
-def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri):
+def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri, resource_hash_dir):
     """
     min(uri_time, cache_time)
     """
     assert puri.uri, puri
-    cache_path = _convenience.jp(CACHE_DIR, puri.scheme, puri.netloc, os.path.abspath(puri.uri))
+    cache_path = _convenience.jp(
+        resource_hash_dir, puri.scheme, puri.netloc, os.path.abspath(puri.uri)
+    )
     try:
         cache_path_stat = os.stat(cache_path)
     except OSError:

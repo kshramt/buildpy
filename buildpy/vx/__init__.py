@@ -56,20 +56,13 @@ class DSL:
     uriparse = staticmethod(_convenience.uriparse)
     hash_dir_of = staticmethod(_convenience.hash_dir_of)
 
-    def __init__(self, argv, use_hash=True, terminate_subprocesses=True):
-        self.id_dsl = (
-            datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
-            + "-"
-            + str(uuid.uuid4())
-        )
+    def __init__(self, argv):
         self.args = _parse_argv(argv[1:])
         assert self.args.jobs > 0
         assert self.args.load_average > 0
 
         logger.setLevel(getattr(logging, self.args.log))
         self.job_of_target = _tval.NonOverwritableDict()
-        self._use_hash = use_hash
-        self._terminate_subprocesses = terminate_subprocesses
         self.time_of_dep_cache = _tval.Cache()
         self.metadata = _tval.TDefaultDict()
         self.event_loop = _event_loop_of()
@@ -83,9 +76,9 @@ class DSL:
         self._cleanuped = False
 
         self.execution_log_dir = (
-            None
-            if self.args.execution_log_dir is None
-            else _convenience.jp(self.args.execution_log_dir, self.id_dsl)
+            _convenience.jp(self.args.execution_log_dir, self.args.id)
+            if self.args.execution_log_dir_append_id
+            else self.args.execution_log_dir
         )
         if self.execution_log_dir:
             _convenience.mkdir(self.execution_log_dir)
@@ -94,7 +87,7 @@ class DSL:
                     dict(
                         args=vars(self.args),
                         executable=sys.executable,
-                        id_dsl=self.id_dsl,
+                        id=self.args.id,
                         version=sys.version,
                         __name__=__name__,
                         __version__=__version__,
@@ -146,7 +139,7 @@ class DSL:
             targets,
             deps,
             desc,
-            _coalesce(use_hash, self._use_hash),
+            _coalesce(use_hash, self.args.use_hash),
             serial,
             priority=priority,
             dsl=self,
@@ -221,7 +214,7 @@ class DSL:
         self.executor.shutdown(wait=False)
         self.event_loop.call_soon_threadsafe(self.event_loop.stop)
         # self.event_loop.call_soon_threadsafe(self.event_loop.close)
-        if self._terminate_subprocesses:
+        if self.args.terminate_subprocesses:
             _terminate_subprocesses()
 
     def die(self, e: str):
@@ -447,7 +440,12 @@ class _FileJob(_Job):
                 t_ds = t
         try:
             t_ts = min(
-                _mtime_of(uri=t, use_hash=False, credential=self._credential_of(t))
+                _mtime_of(
+                    uri=t,
+                    credential=self._credential_of(t),
+                    use_hash=False,
+                    resource_hash_dir=self.dsl.args.resource_hash_dir,
+                )
                 for t in self.ts_unique
             )
         except resource.exceptions:
@@ -468,8 +466,9 @@ class _FileJob(_Job):
             functools.partial(
                 _mtime_of,
                 uri=d,
-                use_hash=self._use_hash,
                 credential=self._credential_of(d),
+                use_hash=self._use_hash,
+                resource_hash_dir=self.dsl.args.resource_hash_dir,
             ),
         )
 
@@ -615,6 +614,8 @@ class _WithMeta:
 
 
 def _parse_argv(argv):
+    buildpy_dir = _convenience.jp(os.getcwd(), ".buildpy")
+
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
@@ -687,10 +688,28 @@ def _parse_argv(argv):
         action="append",
         help="Cut the DAG at the job of the specified resource. You can specify --cut=target multiple times.",
     )
+    parser.add_argument("--use_hash", type=_bool_of_str, default=True)
+    parser.add_argument("--terminate_subprocesses", type=_bool_of_str, default=True)
+    parser.add_argument(
+        "--id",
+        default=(
+            datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            + "-"
+            + str(uuid.uuid4())
+        ),
+    )
     parser.add_argument(
         "--execution_log_dir",
         default=None,
         help="Directory to store the execution logs.",
+    )
+    parser.add_argument(
+        "--execution_log_dir_append_id", type=_bool_of_str, default=False
+    )
+    parser.add_argument(
+        "--resource_hash_dir",
+        default=_convenience.jp(buildpy_dir, "resource_hash"),
+        help="Directory to store resource hash values.",
     )
     parser.add_argument("--message", default="", help="Message.")
     args = parser.parse_args(argv)
@@ -702,6 +721,8 @@ def _parse_argv(argv):
     if args.cut is None:
         args.cut = set()
     args.cut = sorted(set(args.cut))
+    if args.execution_log_dir is None:
+        args.execution_log_dir = _convenience.jp(buildpy_dir, "log", args.id)
     return args
 
 
@@ -777,12 +798,14 @@ def _escape(s: str):
     return '"' + "".join('\\"' if x == '"' else x for x in s) + '"'
 
 
-def _mtime_of(uri, use_hash, credential):
+def _mtime_of(uri, use_hash, credential, resource_hash_dir):
     puri = DSL.uriparse(uri)
     if puri.scheme == "file":
         assert puri.netloc == "localhost", puri
     if puri.scheme in resource.of_scheme:
-        return resource.of_scheme[puri.scheme].mtime_of(uri, credential, use_hash)
+        return resource.of_scheme[puri.scheme].mtime_of(
+            uri, credential, use_hash, resource_hash_dir
+        )
     else:
         raise NotImplementedError(f"_mtime_of({repr(uri)}) is not supported")
 
@@ -870,6 +893,15 @@ def _cdotify(xs):
     if xs and len(xs) > 4:
         xs = xs[:3] + [_CDOTS]
     return xs
+
+
+def _bool_of_str(x):
+    if x == "True":
+        return True
+    elif x == "False":
+        return False
+    else:
+        raise ValueError(f"Unsupported value: {x}")
 
 
 def _do_nothing(*_):

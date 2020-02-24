@@ -54,7 +54,7 @@ os.environ["SHELLOPTS"] = "pipefail:errexit:nounset:noclobber"
 os.environ["PYTHON"] = sys.executable
 
 
-dsl = buildpy.vx.DSL(sys.argv, use_hash=False)
+dsl = buildpy.vx.DSL(sys.argv)
 logger = _setup_logger(dsl.args.log)
 
 file = dsl.file
@@ -105,11 +105,11 @@ EOF
 touch u1 u2
 
 {
-   "$PYTHON" build.py
+   "$PYTHON" build.py --use_hash False
    # HFS has only 1 s time resolution
    sleep 1.1
    touch t1
-   "$PYTHON" build.py -n
+   "$PYTHON" build.py --use_hash False -n
 } 1> actual.1 2> actual.2
 LC_ALL=C sort actual.2 > actual.2.sort
 
