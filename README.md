@@ -127,6 +127,10 @@ dsl.run()
 
 ### v8.0.0
 
+- Support `argparse.Namespace` for `j.ts`, `j.ds`, and `j.data`.
+
+### v8.0.0
+
 - Support automatic target naming via `@file(auto=True)`.
 
 ### v7.1.0
