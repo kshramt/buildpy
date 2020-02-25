@@ -138,6 +138,7 @@ class DSL:
         if cut:
             return None
 
+        ts_prefix = ""
         if auto:
             auto_prefix = _coalesce(auto_prefix, self.args.auto_prefix)
             ds = _de_with_meta(dict(), deps)
@@ -146,7 +147,7 @@ class DSL:
                 auto_prefix,
                 _convenience.hash_dir_of(
                     dict(data=data, ds=ds if auto_use_ds_structure else _unique_of(ds))
-                )
+                ),
             )
             targets = _prepend_prefix(ts_prefix, targets)
         j = _FileJob(
@@ -160,6 +161,7 @@ class DSL:
             dsl=self,
             data=data,
             key=key,
+            ts_prefix=ts_prefix,
         )
         return j
 
@@ -426,10 +428,13 @@ class _PhonyJob(_Job):
 
 
 class _FileJob(_Job):
-    def __init__(self, f, ts, ds, desc, use_hash, serial, priority, dsl, data, key):
+    def __init__(
+        self, f, ts, ds, desc, use_hash, serial, priority, dsl, data, key, ts_prefix
+    ):
         super().__init__(f, ts, ds, desc, priority, dsl=dsl, data=data, key=key)
         self._use_hash = use_hash
         self.serial = serial
+        self.ts_prefix
 
     def __repr__(self):
         return f"{type(self).__name__}({_cdotify(self.ts)}, {_cdotify(self.ds)}, serial={self.serial})"
