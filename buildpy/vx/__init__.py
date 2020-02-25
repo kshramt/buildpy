@@ -307,7 +307,7 @@ class _Job:
         dsl.execution_logger_defined.queue.put(self.to_execution_log_data())
 
     def __repr__(self):
-        return f"{type(self).__name__}({_cdotify(self.ts)}, {_cdotify(self.ds)})"
+        return f"{type(self).__name__}({_cdotify(self.ts_unique)}, {_cdotify(self.ds_unique)})"
 
     def __call__(self, f):
         self.f = f
@@ -437,7 +437,7 @@ class _FileJob(_Job):
         self.ts_prefix
 
     def __repr__(self):
-        return f"{type(self).__name__}({_cdotify(self.ts)}, {_cdotify(self.ds)}, serial={self.serial})"
+        return f"{type(self).__name__}({_cdotify(self.ts_unique)}, {_cdotify(self.ds_unique)}, serial={self.serial})"
 
     def rm_targets(self):
         logger.info(f"rm_targets(%s)", self.ts)
