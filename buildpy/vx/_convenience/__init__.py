@@ -213,14 +213,10 @@ def serialize(x):
                 _save(v)
         elif isinstance(x, set):
             fp.write("S")
-            _save_int(len(x))
-            for v in sorted(x):
-                _save(v)
+            _save(sorted(x))
         elif isinstance(x, tuple):
             fp.write("t")
-            _save_int(len(x))
-            for v in x:
-                _save(v)
+            _save(list(x))
         elif isinstance(x, dict):
             fp.write("d")
             _save_int(len(x))
