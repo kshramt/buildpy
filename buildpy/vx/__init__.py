@@ -142,10 +142,9 @@ class DSL:
             auto_prefix = _coalesce(auto_prefix, self.args.auto_prefix)
             ds = _de_with_meta(dict(), deps)
             # The use of `+ "/" +` is intentional.
-            ts_prefix = (
-                auto_prefix
-                + "/"
-                + _convenience.hash_dir_of(
+            ts_prefix = _convenience.jp(
+                auto_prefix,
+                _convenience.hash_dir_of(
                     dict(data=data, ds=ds if auto_use_ds_structure else _unique_of(ds))
                 )
             )
