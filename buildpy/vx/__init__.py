@@ -434,7 +434,7 @@ class _FileJob(_Job):
         super().__init__(f, ts, ds, desc, priority, dsl=dsl, data=data, key=key)
         self._use_hash = use_hash
         self.serial = serial
-        self.ts_prefix
+        self.ts_prefix = ts_prefix
 
     def __repr__(self):
         return f"{type(self).__name__}({_cdotify(self.ts_unique)}, {_cdotify(self.ds_unique)}, serial={self.serial})"
