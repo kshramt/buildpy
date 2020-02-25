@@ -304,7 +304,7 @@ def _min_of_t_uri_and_t_cache(t_uri, force_hash, puri, resource_hash_dir):
 
 
 def _dump_hash_time_cache(cache_path, t_path, h_path):
-    logger.info(cache_path)
+    logger.debug(cache_path)
     _convenience.mkdir(_convenience.dirname(cache_path))
     with open(cache_path, "w") as fp:
         fcntl.flock(fp, fcntl.LOCK_EX)
@@ -319,7 +319,7 @@ def _load_hash_time_cache(cache_path):
 
 
 def _hash_of_path(path, buf_size=BUF_SIZE):
-    logger.info(path)
+    logger.debug(path)
     buf = bytearray(buf_size)
     h = hashlib.sha1(b"")
     with open(path, "rb") as fp:
