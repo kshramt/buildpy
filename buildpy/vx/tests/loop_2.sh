@@ -55,7 +55,7 @@ def _(i, j):
     all_jobs.append(f"{i}_{j}")
     @phony(f"{i}_{j}", [])
     def _(j):
-        print(j.ts[0])
+        print(j.ts)
 
 phony("all", all_jobs)
 

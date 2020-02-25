@@ -47,7 +47,7 @@ rm = dsl.rm
 
 @phony("all", ["x"])
 def _(j):
-    print(j.ts[0], j.ds[0])
+    print(j.ts, j.ds[0])
 
 @file(["x"], ["y", "z"], use_hash=True)
 def _(j):
