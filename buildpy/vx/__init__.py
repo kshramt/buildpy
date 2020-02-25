@@ -691,7 +691,7 @@ class _ThreadPoolExecutor:
             self._queue.put(wi)
         with self._threads_lock:
             if len(self._threads) < 1 or (
-                len(self._threads) <= self._n_max
+                len(self._threads) < self._n_max
                 and os.getloadavg()[0] <= self._load_average
             ):
                 t = threading.Thread(target=self._worker, daemon=True)
