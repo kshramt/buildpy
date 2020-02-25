@@ -185,9 +185,9 @@ def serialize(x):
     >>> serialize(dict(a=[1, 2.0, [3.0, {4: [-5.0, -0.0], -9e301: "直列化"}], None]))
     'di1_si1_ali4_i1_fi20_0x1.0000000000000p+1li2_fi20_0x1.8000000000000p+1di2_fi24_-0x1.0cc7a8fa052b1p+1003si3_直列化i4_li2_fi21_-0x1.4000000000000p+2fi9_-0x0.0p+0n'
     >>> serialize((1, 2))
-    'ti2_i1_i2_'
+    'tli2_i1_i2_'
     >>> serialize(set([1, 2]))
-    'Si2_i1_i2_'
+    'Sli2_i1_i2_'
     """
 
     fp = io.StringIO()
@@ -223,6 +223,9 @@ def serialize(x):
             for k in sorted(x.keys()):
                 _save(k)
                 _save(x[k])
+        elif isinstance(x, argparse.Namespace):
+            fp.write("N")
+            _save(vars(x))
         else:
             raise ValueError(f"Unsupported argument {x} of type {type(x)} for `_save`")
 
