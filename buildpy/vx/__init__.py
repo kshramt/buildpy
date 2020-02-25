@@ -304,6 +304,17 @@ class _Job:
 
         # User data.
         self.data = data
+        self._execution_log_data = _convenience.dictify(
+            dict(
+                data=self.data,
+                desc=self.desc,
+                ds=self.ds,
+                priority=self.priority,
+                serial=self.serial,
+                ts=self.ts,
+                key=self.key,
+            )
+        )
         dsl.execution_logger_defined.queue.put(self.to_execution_log_data())
 
     def __repr__(self):
@@ -353,16 +364,7 @@ class _Job:
             pass
 
     def to_execution_log_data(self):
-        return dict(
-            data=self.data,
-            desc=self.desc,
-            ds=self.ds,
-            priority=self.priority,
-            serial=self.serial,
-            successed=self.successed,
-            ts=self.ts,
-            key=self.key,
-        )
+        return {"successed": self.successed, **self._execution_log_data}
 
     async def ainvoke(self, call_chain):
         # This coroutine runs inside self.dsl.event_loop.

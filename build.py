@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 
+from argparse import Namespace as nas
 import logging
 import os
 import re
+from shlex import quote as esc
 import subprocess
 import sys
 
@@ -114,19 +116,21 @@ touch {j.ts[0]}
 
     @loop(path for path in v_test_files if path.endswith(".py"))
     def _(test_py):
-        test_py_done = test_py + ".done"
-        check_v_jobs.append(test_py_done)
-
         @file(
-            [test_py_done], [test_py] + v_py_files, desc=f"Test {test_py}", priority=-1
+            test_py + ".done",
+            nas(exe=test_py, deps=v_py_files),
+            desc=f"Test {test_py}",
+            priority=-1,
         )
-        def _(j):
+        def job(j):
             sh(
                 f"""
-{python} {j.ds[0]}
-touch {j.ts[0]}
+{python} {esc(j.ds.exe)}
+touch {esc(j.ts)}
                 """
             )
+
+        check_v_jobs.extend(job.ts_unique)
 
     phony(f"check-{v}", check_v_jobs)
 

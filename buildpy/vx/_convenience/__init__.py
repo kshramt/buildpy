@@ -1,3 +1,4 @@
+import argparse
 import collections
 import hashlib
 import inspect
@@ -236,6 +237,19 @@ def serialize(x):
 
     _save(x)
     return fp.getvalue()
+
+
+def dictify(x):
+    if isinstance(x, argparse.Namespace):
+        return dictify(vars(x))
+    elif isinstance(x, dict):
+        return {k: dictify(v) for k, v in x.items()}
+    elif isinstance(x, list):
+        return [dictify(v) for v in x]
+    elif isinstance(x, tuple):
+        return tuple(dictify(v) for v in x)
+    else:
+        return x
 
 
 def hash_dir_of(x):
