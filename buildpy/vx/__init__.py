@@ -179,7 +179,7 @@ class DSL:
             return None
 
         j = _PhonyJob(
-            _do_nothing, [target], deps, desc, priority, dsl=self, data=data, key=key
+            _do_nothing, target, deps, desc, priority, dsl=self, data=data, key=key
         )
         return j
 
@@ -420,7 +420,7 @@ class _Job:
 
 class _PhonyJob(_Job):
     def __init__(self, f, ts, ds, desc, priority, dsl, data, key):
-        if not (isinstance(ts, list) and len(ts) == 1):
+        if len(_unique_of(ts)) != 1:
             raise exception.Err(
                 f"PhonyJob with multiple targets is not supported: {f}, {ts}, {ds}"
             )
