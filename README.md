@@ -125,7 +125,7 @@ dsl.run()
 
 ## News
 
-### v8.0.0
+### v8.1.0
 
 - Support `argparse.Namespace` for `j.ts`, `j.ds`, and `j.data`.
 
