@@ -985,6 +985,8 @@ def _prepend_prefix(prefix, x):
             return [impl(v) for v in x]
         elif isinstance(x, dict):
             return {k: impl(v) for k, v in x.items()}
+        elif isinstance(x, argparse.Namespace):
+            return argparse.Namespace(**impl(vars(x)))
         else:
             return _convenience.jp(prefix, x)
 
@@ -1000,6 +1002,8 @@ def _de_with_meta(metadata, x):
             return [impl(v) for v in x]
         elif isinstance(x, dict):
             return {k: impl(v) for k, v in x.items()}
+        elif isinstance(x, argparse.Namespace):
+            return argparse.Namespace(**impl(vars(x)))
         else:
             return x
 
@@ -1016,6 +1020,8 @@ def _unique_of(xs):
         elif isinstance(x, dict):
             for y in x.values():
                 impl(y)
+        elif isinstance(x, argparse.Namespace):
+            impl(vars(x))
         else:
             ret.add(x)
 
