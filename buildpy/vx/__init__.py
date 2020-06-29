@@ -29,7 +29,7 @@ from . import exception
 from . import resource
 
 
-__version__ = "8.1.1"
+__version__ = "8.1.2"
 T1 = typing.TypeVar("T1")
 T2 = typing.TypeVar("T2")
 TK = typing.TypeVar("TK")
@@ -383,9 +383,11 @@ class _Job:
                     child = self.dsl.job_of_target[d]
                 except KeyError:
 
-                    @self.dsl.file([self.dsl.meta(d, keep=True)], [])
-                    def _(j):
-                        raise exception.Err(f"No rule to make {d}")
+                    @_convenience.let
+                    def _(d=d):
+                        @self.dsl.file([self.dsl.meta(d, keep=True)], [])
+                        def _(j):
+                            raise exception.Err(f"No rule to make {d}")
 
                     child = self.dsl.job_of_target[d]
                 self.dsl.event_loop.create_task(child.ainvoke(cc))
