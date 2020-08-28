@@ -125,6 +125,11 @@ dsl.run()
 
 ## News
 
+### v9.0.0
+
+- Add `DSL.with_symlink`.
+- Use SHA256 instead of SHA1.
+
 ### v8.1.0
 
 - Support `argparse.Namespace` for `j.ts`, `j.ds`, and `j.data`.
