@@ -5,11 +5,13 @@ import inspect
 import io
 import itertools
 import os
+import shutil
 import subprocess
 import sys
 import urllib
 
 from .. import exception
+from .._log import logger
 
 
 _URI = collections.namedtuple(
@@ -41,6 +43,19 @@ class cd:
 
     def __repr__(self):
         return f"#<{self.__class__.__name__} old={self.old}, new={self.new}>"
+
+
+def with_symlink(path: str):
+    def impl(f):
+        def deco(j):
+            f(j)
+            if j.ts_prefix:
+                mkdir(dirname(path))
+                ln(j.ts_prefix, path, absolute=True)
+
+        return deco
+
+    return impl
 
 
 def sh(
@@ -108,6 +123,24 @@ def loop(*lists, tform=itertools.product):
 
 def mkdir(path):
     return os.makedirs(path, exist_ok=True)
+
+
+def ln(src, dst, absolute=False):
+    mkdir(dirname(dst))
+    if absolute:
+        src = os.path.abspath(src)
+    try:
+        os.symlink(src, dst)
+    except FileExistsError:
+        rm(dst)
+        os.symlink(src, dst)
+
+
+def rm(path):
+    try:
+        return os.remove(path)
+    except OSError:
+        return shutil.rmtree(path)
 
 
 def dirname(path):
@@ -252,9 +285,9 @@ def dictify(x):
 
 
 def hash_dir_of(x):
-    h = _hash_of(x)
+    h = sha256_of(serialize(x).encode())
     return jp(h[:2], h[2:])
 
 
-def _hash_of(x):
-    return hashlib.sha1(serialize(x).encode()).hexdigest()
+def sha256_of(buf):
+    return hashlib.sha256(buf).hexdigest()

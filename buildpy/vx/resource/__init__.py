@@ -1,7 +1,6 @@
 import abc
 import fcntl
 import functools
-import hashlib
 import json
 import mmap
 import os
@@ -43,10 +42,7 @@ class LocalFile(Resource):
     @classmethod
     def rm(cls, uri, credential):
         puri = cls._check_uri(uri)
-        try:
-            return os.remove(puri.uri)
-        except OSError:
-            return shutil.rmtree(puri.uri)
+        _convenience.rm(puri.uri)
 
     @classmethod
     def mtime_of(cls, uri, credential, use_hash, resource_hash_dir):
@@ -320,12 +316,8 @@ def _hash_of_path(path):
     logger.debug("%s", path)
     sz = os.path.getsize(path)
     if sz == 0:
-        return _sha256_of(b"")
+        return _convenience.sha256_of(b"")
     with open(path, "rb") as fp, mmap.mmap(
         fp.fileno(), sz, access=mmap.ACCESS_READ
     ) as buf:
-        return _sha256_of(buf)
-
-
-def _sha256_of(buf):
-    return hashlib.sha256(buf).hexdigest()
+        return _convenience.sha256_of(buf)

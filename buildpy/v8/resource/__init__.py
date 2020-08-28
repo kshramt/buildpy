@@ -320,12 +320,12 @@ def _hash_of_path(path):
     logger.debug("%s", path)
     sz = os.path.getsize(path)
     if sz == 0:
-        return _sha256_of(b"")
+        return _sha1_of(b"")
     with open(path, "rb") as fp, mmap.mmap(
         fp.fileno(), sz, access=mmap.ACCESS_READ
     ) as buf:
-        return _sha256_of(buf)
+        return _sha1_of(buf)
 
 
-def _sha256_of(buf):
-    return hashlib.sha256(buf).hexdigest()
+def _sha1_of(buf):
+    return hashlib.sha1(buf).hexdigest()

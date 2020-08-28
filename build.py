@@ -77,6 +77,7 @@ phony("all", [], desc="The default target")
 def _(j):
     sh(
         f"""
+rm -fr buildpy.egg-info
 {python} setup.py sdist
         """
     )
@@ -102,7 +103,8 @@ def _(v):
     def _(test_sh):
         test_sh_done = test_sh + ".done"
 
-        @file([test_sh_done], [test_sh] + v_py_files, desc=f"Test {test_sh}")
+        @file(["done"], [test_sh] + v_py_files, desc=f"Test {test_sh}", auto=True)
+        @dsl.with_symlink(test_sh_done)
         def job(j):
             sh(
                 f"""
@@ -117,15 +119,18 @@ touch {j.ts[0]}
     @loop(path for path in v_test_files if path.endswith(".py"))
     def _(test_py):
         @file(
-            test_py + ".done",
+            "done",
             nas(exe=test_py, deps=v_py_files),
             desc=f"Test {test_py}",
             priority=-1,
+            auto=True,
         )
+        @dsl.with_symlink(test_py + ".done")
         def job(j):
             sh(
                 f"""
 {python} {esc(j.ds.exe)}
+mkdir -p "$(dirname {esc(j.ts)})"
 touch {esc(j.ts)}
                 """
             )

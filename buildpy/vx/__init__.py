@@ -54,6 +54,9 @@ class DSL:
     serialize = staticmethod(_convenience.serialize)
     uriparse = staticmethod(_convenience.uriparse)
     hash_dir_of = staticmethod(_convenience.hash_dir_of)
+    with_symlink = staticmethod(_convenience.with_symlink)
+    ln = staticmethod(_convenience.ln)
+    rm = staticmethod(_convenience.rm)
 
     def __init__(self, argv):
         self.args = _parse_argv(argv[1:])
@@ -126,6 +129,7 @@ class DSL:
         key=None,
         auto=False,
         auto_prefix=None,
+        auto_group="_",  # todo: Consider renaming.
         auto_use_ds_structure=False,
     ):
         """Declare a file job.
@@ -145,6 +149,7 @@ class DSL:
             # The use of `+ "/" +` is intentional.
             ts_prefix = _convenience.jp(
                 auto_prefix,
+                auto_group,
                 _convenience.hash_dir_of(
                     dict(data=data, ds=ds if auto_use_ds_structure else _unique_of(ds))
                 ),
