@@ -57,7 +57,7 @@ def with_symlink(path: str):
             f(j)
             if j.ts_prefix:
                 mkdir(dirname(path))
-                ln(j.ts_prefix, os.path.abspath(path))
+                ln(os.path.abspath(j.ts_prefix), path)
 
         return deco
 
