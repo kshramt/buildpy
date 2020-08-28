@@ -1,5 +1,5 @@
 import argparse
-import collections
+import dataclasses
 import hashlib
 import inspect
 import io
@@ -14,9 +14,15 @@ from .. import exception
 from .._log import logger
 
 
-_URI = collections.namedtuple(
-    "_URI", ["uri", "scheme", "netloc", "path", "params", "query", "fragment"]
-)
+@dataclasses.dataclass
+class _URI:
+    uri: str
+    scheme: str
+    netloc: str
+    path: str
+    params: str
+    query: str
+    fragment: str
 
 
 class cd:

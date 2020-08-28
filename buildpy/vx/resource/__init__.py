@@ -4,7 +4,6 @@ import functools
 import json
 import mmap
 import os
-import shutil
 import threading
 import time
 
