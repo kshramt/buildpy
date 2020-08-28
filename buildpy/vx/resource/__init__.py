@@ -3,6 +3,7 @@ import fcntl
 import functools
 import hashlib
 import json
+import mmap
 import os
 import shutil
 import threading
@@ -15,9 +16,6 @@ from .._log import logger
 from .. import _tval
 from .. import _convenience
 from .. import exception
-
-
-BUF_SIZE = 65536
 
 
 class Resource(abc.ABC):
@@ -318,17 +316,16 @@ def _load_hash_time_cache(cache_path):
     return data["t"], data["h"]
 
 
-def _hash_of_path(path, buf_size=BUF_SIZE):
-    logger.debug(path)
-    buf = bytearray(buf_size)
-    h = hashlib.sha1(b"")
-    with open(path, "rb") as fp:
-        while True:
-            n = fp.readinto(buf)
-            if n <= 0:
-                break
-            elif n < buf_size:
-                h.update(buf[:n])
-            else:
-                h.update(buf)
-    return h.hexdigest()
+def _hash_of_path(path):
+    logger.debug("%s", path)
+    sz = os.path.getsize(path)
+    if sz == 0:
+        return _sha256_of(b"")
+    with open(path, "rb") as fp, mmap.mmap(
+        fp.fileno(), sz, access=mmap.ACCESS_READ
+    ) as buf:
+        return _sha256_of(buf)
+
+
+def _sha256_of(buf):
+    return hashlib.sha256(buf).hexdigest()
