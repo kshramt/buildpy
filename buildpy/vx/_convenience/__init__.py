@@ -57,7 +57,7 @@ def with_symlink(path: str):
             f(j)
             if j.ts_prefix:
                 mkdir(dirname(path))
-                ln(j.ts_prefix, path, absolute=True)
+                ln(j.ts_prefix, os.path.abspath(path))
 
         return deco
 
@@ -131,10 +131,8 @@ def mkdir(path):
     return os.makedirs(path, exist_ok=True)
 
 
-def ln(src, dst, absolute=False):
+def ln(src, dst):
     mkdir(dirname(dst))
-    if absolute:
-        src = os.path.abspath(src)
     try:
         os.symlink(src, dst)
     except FileExistsError:
