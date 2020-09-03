@@ -57,6 +57,9 @@ class DSL:
     with_symlink = staticmethod(_convenience.with_symlink)
     ln = staticmethod(_convenience.ln)
     rm = staticmethod(_convenience.rm)
+    lazy_call = staticmethod(_convenience.lazy_call)
+    lazy_val = staticmethod(_convenience.lazy_val)
+    force = staticmethod(_convenience.force)
 
     def __init__(self, argv):
         self.args = _parse_argv(argv[1:])

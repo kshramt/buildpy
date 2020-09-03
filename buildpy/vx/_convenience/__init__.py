@@ -25,6 +25,49 @@ class _URI:
     fragment: str
 
 
+class _Lazy:
+    def __init__(self):
+        self._result = None
+        self._set = False
+
+
+class _LazyCall(_Lazy):
+    def __init__(self, fn, *args, **kwargs):
+        super().__init__()
+        self._fn = fn
+        self._args = args
+        self._kwargs = kwargs
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self._fn}, *{self._args}, **{self._kwargs})"
+
+    def get(self):
+        if not self._set:
+            self._result = force(self._fn)(*force(self._args), **force(self._kwargs))
+            self._set = True
+        return self._result
+
+
+class _LazyVal(_Lazy):
+    def __repr__(self):
+        return f"{self.__class__.__name__}<self._set={self._set}, self._result={self._result}>"
+
+    def set(self, x):
+        if self._set:
+            raise exception.MultipleSetError(
+                f"{self}.set({x}) should not be called multiple times."
+            )
+        self._result = x
+        self._set = True
+
+    def get(self):
+        if not self._set:
+            raise exception.NotSetError(
+                f"{self}.get() should not be called before a set call."
+            )
+        return self._result
+
+
 class cd:
     __slots__ = ["old", "new"]
 
@@ -62,6 +105,29 @@ def with_symlink(path: str):
         return deco
 
     return impl
+
+
+def lazy_call(fn, *args, **kwargs):
+    return _LazyCall(fn, *args, **kwargs)
+
+
+def lazy_val():
+    return _LazyVal()
+
+
+def force(x):
+    if isinstance(x, _Lazy):
+        return force(x.get())
+    elif isinstance(x, tuple):
+        return tuple(force(v) for v in x)
+    elif isinstance(x, list):
+        return [force(v) for v in x]
+    elif isinstance(x, dict):
+        return {force(k): force(v) for k, v in x.items()}
+    elif isinstance(x, argparse.Namespace):
+        return argparse.Namespace(**force(vars(x)))
+    else:
+        return x
 
 
 def sh(

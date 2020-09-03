@@ -10,16 +10,23 @@ import buildpy.vx
 
 def main(argv):
     for mod in [
-            buildpy.vx,
-            buildpy.vx._convenience,
-            buildpy.vx._log,
-            buildpy.vx._tval,
-            buildpy.vx.exception,
-            buildpy.vx.resource,
+        buildpy.vx,
+        buildpy.vx._convenience,
+        buildpy.vx._log,
+        buildpy.vx._tval,
+        buildpy.vx.exception,
+        buildpy.vx.resource,
     ]:
         result = doctest.testmod(mod)
         if result.failed > 0:
             exit(mod)
+
+    @buildpy.vx.DSL.let
+    def _():
+        a = buildpy.vx.DSL.lazy_val()
+        d = dict(a=a, b=buildpy.vx.DSL.lazy_call(lambda x, y: x * y, a, 8))
+        a.set(9)
+        assert buildpy.vx.DSL.force(d) == dict(a=9, b=72), d
 
     @buildpy.vx.DSL.let
     def _():
@@ -46,9 +53,18 @@ def main(argv):
         assert s == "li1_fi22_0x1.f041b8a7a54f1p+295", s
         s = buildpy.vx.DSL.serialize([1.234e89, 32])
         assert s == "li2_fi22_0x1.f041b8a7a54f1p+295i32_", s
-        s = buildpy.vx.DSL.serialize({1: 1.234e89, 99: ["b", 4], 3.2: {"p": 9, "r": -9831.98773}})
-        assert s == "di3_i1_fi22_0x1.f041b8a7a54f1p+295fi20_0x1.999999999999ap+1di2_si1_pi9_si1_rfi22_-0x1.333fe6defc7a4p+13i99_li2_si1_bi4_", s
-        assert buildpy.vx.DSL.serialize(dict(a=1, b=2, c=3)) == buildpy.vx.DSL.serialize(dict(c=3, b=2, a=1)) == buildpy.vx.DSL.serialize(dict(b=2, a=1, c=3))
+        s = buildpy.vx.DSL.serialize(
+            {1: 1.234e89, 99: ["b", 4], 3.2: {"p": 9, "r": -9831.98773}}
+        )
+        assert (
+            s
+            == "di3_i1_fi22_0x1.f041b8a7a54f1p+295fi20_0x1.999999999999ap+1di2_si1_pi9_si1_rfi22_-0x1.333fe6defc7a4p+13i99_li2_si1_bi4_"
+        ), s
+        assert (
+            buildpy.vx.DSL.serialize(dict(a=1, b=2, c=3))
+            == buildpy.vx.DSL.serialize(dict(c=3, b=2, a=1))
+            == buildpy.vx.DSL.serialize(dict(b=2, a=1, c=3))
+        )
 
     @buildpy.vx.DSL.let
     def _():
@@ -61,25 +77,31 @@ def main(argv):
             tmp0 = os.getcwd()
             tmp1 = tempfile.gettempdir()
             tmp2box = []
+
             @buildpy.vx.DSL.cd(tmp1)
             def _():
                 tmp2box.append(os.getcwd())
+
             tmp3 = os.getcwd()
             comp(tmp0, tmp3)
             comp(tmp1, tmp2box[0])
+
         @buildpy.vx.DSL.let
         def _():
             tmp0 = os.getcwd()
             tmp1 = tempfile.gettempdir()
             tmp2box = []
+
             @buildpy.vx.DSL.cd(tmp1)
             def _(c):
                 tmp2box.append(os.getcwd())
                 comp(c.old, tmp0)
                 comp(c.new, tmp2box[0])
+
             tmp3 = os.getcwd()
             comp(tmp0, tmp3)
             comp(tmp1, tmp2box[0])
+
         @buildpy.vx.DSL.let
         def _():
             tmp0 = os.getcwd()
@@ -89,6 +111,7 @@ def main(argv):
             tmp3 = os.getcwd()
             comp(tmp0, tmp3)
             comp(tmp1, tmp2)
+
         @buildpy.vx.DSL.let
         def _():
             tmp0 = os.getcwd()

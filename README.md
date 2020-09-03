@@ -125,6 +125,10 @@ dsl.run()
 
 ## News
 
+### v9.1.0
+
+- Add `DSL.lazy_call` and `DSL.lazy_val`._
+
 ### v9.0.0
 
 - Add `DSL.with_symlink`.

@@ -1,8 +1,14 @@
 class Err(Exception):
-    def __init__(self, msg=""):
-        super().__init__(msg)
+    pass
 
 
 class NotFound(Err):
-    def __init__(self, msg=""):
-        super().__init__(msg)
+    pass
+
+
+class MultipleSetError(Err):
+    pass
+
+
+class NotSetError(Err):
+    pass
