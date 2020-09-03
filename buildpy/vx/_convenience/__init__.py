@@ -95,16 +95,25 @@ class cd:
 
 
 def with_symlink(path: str):
-    def impl(f):
-        def deco(j):
-            f(j)
-            if j.ts_prefix:
-                mkdir(dirname(path))
-                ln(os.path.abspath(j.ts_prefix), path)
+    def symlink_job_of(j):
+        if not j.ts_prefix:
+            raise ValueError(f"{j}.ts_prefix should not be empty.")
 
-        return deco
+        ts = []
+        for t in j.ts_unique:
+            if not t.startswith(j.ts_prefix):
+                raise ValueError(
+                    f"{t} in {j.ts_unique} does not starts with {j.ts_prefix}."
+                )
+            ts.append(jp(path, t[len(j.ts_prefix) :]))
 
-    return impl
+        @j.dsl.file(ts, j.ts_unique)
+        def symlink_job(sj):
+            ln(os.path.abspath(j.ts_prefix), path)
+
+        return symlink_job
+
+    return symlink_job_of
 
 
 def lazy_call(fn, *args, **kwargs):

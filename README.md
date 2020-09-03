@@ -128,6 +128,7 @@ dsl.run()
 ### v9.1.0
 
 - Add `DSL.lazy_call` and `DSL.lazy_val`._
+- `with_symlink` now modifies the DAG.
 
 ### v9.0.0
 

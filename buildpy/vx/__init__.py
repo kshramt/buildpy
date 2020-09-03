@@ -29,7 +29,7 @@ from . import exception
 from . import resource
 
 
-__version__ = "9.0.1"
+__version__ = "9.1.0"
 T1 = typing.TypeVar("T1")
 T2 = typing.TypeVar("T2")
 TK = typing.TypeVar("TK")

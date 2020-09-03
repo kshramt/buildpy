@@ -103,8 +103,8 @@ def _(v):
     def _(test_sh):
         test_sh_done = test_sh + ".done"
 
-        @file(["done"], [test_sh] + v_py_files, desc=f"Test {test_sh}", auto=True)
         @dsl.with_symlink(test_sh_done)
+        @file(["done"], [test_sh] + v_py_files, desc=f"Test {test_sh}", auto=True)
         def job(j):
             sh(
                 f"""
@@ -118,6 +118,7 @@ touch {j.ts[0]}
 
     @loop(path for path in v_test_files if path.endswith(".py"))
     def _(test_py):
+        @dsl.with_symlink(test_py + ".done")
         @file(
             "done",
             nas(exe=test_py, deps=v_py_files),
@@ -125,7 +126,6 @@ touch {j.ts[0]}
             priority=-1,
             auto=True,
         )
-        @dsl.with_symlink(test_py + ".done")
         def job(j):
             sh(
                 f"""
