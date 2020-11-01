@@ -109,7 +109,7 @@ def with_symlink(path: str):
 
         @j.dsl.file(ts, j.ts_unique)
         def symlink_job(sj):
-            ln(os.path.abspath(j.ts_prefix), path)
+            ln(os.path.relpath(j.ts_prefix, dirname(path)), path, verbose=True)
 
         return symlink_job
 
@@ -202,12 +202,16 @@ def loop(*lists, tform=itertools.product):
     return deco
 
 
-def mkdir(path):
+def mkdir(path, verbose=False):
+    if verbose:
+        logger.info("mkdir(%r)", path)
     return os.makedirs(path, exist_ok=True)
 
 
-def ln(src, dst):
-    mkdir(dirname(dst))
+def ln(src, dst, verbose=False):
+    mkdir(dirname(dst), verbose=verbose)
+    if verbose:
+        logger.info("ln(%r, %r)", src, dst)
     try:
         os.symlink(src, dst)
     except FileExistsError:
@@ -215,7 +219,9 @@ def ln(src, dst):
         os.symlink(src, dst)
 
 
-def rm(path):
+def rm(path, verbose=False):
+    if verbose:
+        logger.info("rm(%r)", path)
     try:
         return os.remove(path)
     except OSError:

@@ -125,9 +125,13 @@ dsl.run()
 
 ## News
 
+### v9.2.0
+
+- `with_symlink` now uses the relative path instead of the absolute path.
+
 ### v9.1.0
 
-- Add `DSL.lazy_call` and `DSL.lazy_val`._
+- Add `DSL.lazy_call` and `DSL.lazy_val`.
 - `with_symlink` now modifies the DAG.
 
 ### v9.0.0
