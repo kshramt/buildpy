@@ -1,6 +1,6 @@
 # BuildPy
 
-[![Build Status](https://travis-ci.org/kshramt/buildpy.svg?branch=master)](https://travis-ci.org/kshramt/buildpy)
+[![Build Status](https://travis-ci.com/kshramt/buildpy.svg?branch=master)](https://travis-ci.com/kshramt/buildpy)
 
 BuildPy is a workflow engine to manage data analysis pipelines.
 It has following features:
