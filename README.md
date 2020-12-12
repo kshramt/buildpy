@@ -281,7 +281,7 @@ python build.py sdist
 
 ```
 python3 -m venv venv
-venv/bin/python3 setup.py develop
+venv/bin/python3 pip install -e .[dev]
 venv/bin/python3 build.py -h
 ```
 
