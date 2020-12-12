@@ -77,8 +77,7 @@ phony("all", [], desc="The default target")
 def _(j):
     sh(
         f"""
-rm -fr buildpy.egg-info
-{python} setup.py sdist
+{python} setup.py bdist_wheel
         """
     )
 
