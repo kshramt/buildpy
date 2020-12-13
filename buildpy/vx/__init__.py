@@ -758,9 +758,7 @@ class _WithMeta:
         self.meta = kwargs
 
 
-def _parse_argv(argv):
-    buildpy_dir = _convenience.jp(os.getcwd(), ".buildpy")
-
+def _parse_argv(argv, buildpy_dir=".buildpy"):
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
