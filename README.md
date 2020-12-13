@@ -125,6 +125,10 @@ dsl.run()
 
 ## News
 
+### v9.3.0
+
+- `buildpy_dir` no longer contains `os.getcwd()`.
+
 ### v9.2.0
 
 - `with_symlink` now uses the relative path instead of the absolute path.
