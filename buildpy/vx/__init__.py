@@ -29,7 +29,7 @@ from . import exception
 from . import resource
 
 
-__version__ = "9.3.0"
+__version__ = "9.4.0"
 T1 = typing.TypeVar("T1")
 T2 = typing.TypeVar("T2")
 TK = typing.TypeVar("TK")
@@ -156,6 +156,7 @@ class DSL:
                 _convenience.hash_dir_of(
                     dict(data=data, ds=ds if auto_use_ds_structure else _unique_of(ds))
                 ),
+                "ts",
             )
             targets = _prepend_prefix(ts_prefix, targets)
         j = _FileJob(

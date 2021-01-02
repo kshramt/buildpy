@@ -125,6 +125,10 @@ dsl.run()
 
 ## News
 
+### v9.4.0
+
+- `hash/` -> `hash/ts`
+
 ### v9.3.0
 
 - `buildpy_dir` no longer contains `os.getcwd()`.

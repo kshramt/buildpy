@@ -58,7 +58,7 @@ assert len(dsl.jobs_of_key[None]) == 1, dsl.jobs_of_key
 assert len(dsl.jobs_of_key[("y", 1)]) == 1, dsl.jobs_of_key
 n_auto_prefix = len(dsl.args.auto_prefix)
 pjds = [x[n_auto_prefix:] for x in pj.ds]
-assert pjds == ["/_/28/a82f624f09c8a1a82cc38d8ef78e5a7e30b0c4de648f435e6ab6c0c8f60b66/x"], pjds
+assert pjds == ["/_/28/a82f624f09c8a1a82cc38d8ef78e5a7e30b0c4de648f435e6ab6c0c8f60b66/ts/x"], pjds
 
 
 if __name__ == '__main__':
