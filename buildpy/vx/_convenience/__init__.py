@@ -250,8 +250,13 @@ def jp(path, *more):
     'a'
     >>> jp("a", "/b", "c")
     'a/b/c'
+    >>> jp("gs://b", "c//d")
+    'gs://b/c/d'
     """
-    return os.path.normpath(os.path.sep.join((path, os.path.sep.join(more))))
+    puri = urllib.parse.urlparse(os.path.sep.join((path, os.path.sep.join(more))))
+    return urllib.parse.ParseResult(
+        **{**puri._asdict(), **dict(path=os.path.normpath(puri.path))}
+    ).geturl()
 
 
 def uriparse(uri):
